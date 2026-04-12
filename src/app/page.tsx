@@ -1,65 +1,58 @@
-import Image from "next/image";
+import Image from 'next/image';
+import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex flex-col flex-1">
+      {/* Hero Section */}
+      <section className="bg-cover bg-center h-96 text-white flex items-center justify-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=1974&auto=format&fit=crop')" }}>
+        <div className="text-center bg-black bg-opacity-50 p-8 rounded-lg">
+          <h1 className="text-5xl font-bold mb-4">Найдите дом своей мечты</h1>
+          <p className="text-xl mb-8">Мы поможем вам найти идеальную недвижимость</p>
+          <Link href="/catalog/apartments" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Начать поиск
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Featured Properties */}
+      <section className="py-12">
+        <h2 className="text-3xl font-bold text-center mb-8">Рекомендуемые объекты</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Property 1 */}
+          <div className="border rounded-lg overflow-hidden shadow-lg">
+            <Image src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=2070&auto=format&fit=crop" alt="Property 1" width={500} height={300} />
+            <div className="p-4">
+              <h3 className="text-xl font-bold mb-2">Современная квартира в центре</h3>
+              <p className="text-gray-700">Цена: 10 000 000 руб.</p>
+            </div>
+          </div>
+          {/* Property 2 */}
+          <div className="border rounded-lg overflow-hidden shadow-lg">
+            <Image src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2070&auto=format&fit=crop" alt="Property 2" width={500} height={300} />
+            <div className="p-4">
+              <h3 className="text-xl font-bold mb-2">Уютный загородный дом</h3>
+              <p className="text-gray-700">Цена: 25 000 000 руб.</p>
+            </div>
+          </div>
+          {/* Property 3 */}
+          <div className="border rounded-lg overflow-hidden shadow-lg">
+            <Image src="https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=2070&auto=format&fit=crop" alt="Property 3" width={500} height={300} />
+            <div className="p-4">
+              <h3 className="text-xl font-bold mb-2">Дом с бассейном</h3>
+              <p className="text-gray-700">Цена: 35 000 000 руб.</p>
+            </div>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* About Us */}
+      <section className="bg-gray-100 py-12">
+        <div className="container mx-auto text-center">
+          <h2 className="text-3xl font-bold mb-4">О нас</h2>
+          <p className="text-lg text-gray-700 max-w-2xl mx-auto">Мы — команда профессионалов, которая поможет вам найти недвижимость вашей мечты. Мы предлагаем широкий выбор объектов и полное сопровождение сделки.</p>
+        </div>
+      </section>
     </div>
   );
 }

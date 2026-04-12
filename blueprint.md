@@ -1,26 +1,49 @@
-# ХОМС РФ - Платформа недвижимости Сочи
+# Blueprint: Real Estate App
 
-## Обзор
+## Overview
 
-ХОМС РФ - это платформа для продажи недвижимости в Сочи. Она включает в себя каталог объектов, конфигуратор домов, блог и CRM-систему для администраторов.
+This document outlines the project structure, design, and features of the Real Estate App. This application is designed to help users find and explore real estate properties.
 
-## Особенности
+## Project Structure
 
-- **Витрина объектов:** Главная страница с отображением популярных объектов недвижимости.
-- **Каталог:** Разделы для домов, участков и новостроек.
-- **Карточка объекта:** Детальная информация о каждом объекте.
-- **Конфигуратор дома:** Интерактивный 3D-конфигуратор для проектирования домов.
-- **Блог:** Статьи, новости и отзывы.
-- **CRM-панель:** Панель администратора для управления объектами и лидами.
-- **AI-генерация:** Использование Gemini API для генерации контента.
-- **Медиа-хранилище:** Yandex Cloud Bucket для хранения медиафайлов.
+*   `/app`: Main directory for application routes.
+    *   `/admin`: Admin panel.
+    *   `/blog`: Blog section.
+    *   `/catalog`: Property catalog.
+    *   `/constructor`: Property constructor.
+    *   `/crm`: CRM for agents.
+    *   `/developers`: Information about developers.
+    *   `/map`: Interactive map of properties.
+    *   `layout.tsx`: Main application layout.
+    *   `page.tsx`: Home page.
+*   `/components`: Reusable components.
+    *   `Header.tsx`: Application header.
+    *   `Footer.tsx`: Application footer.
+*   `/public`: Static assets (images, fonts, etc.).
+*   `tailwind.config.ts`: Tailwind CSS configuration.
+*   `next.config.js`: Next.js configuration.
 
-## План разработки
+## Design
 
-1.  **Создать структуру проекта:** Настроить файловую структуру Next.js App Router.
-2.  **Установить зависимости:** Добавить `prisma` и `next-auth`.
-3.  **Создать страницы:** Реализовать основные страницы приложения с заглушками.
-4.  **Настроить Prisma:** Сконфигурировать Prisma для работы с PostgreSQL.
-5.  **Реализовать аутентификацию:** Добавить NextAuth для защиты CRM-панели.
-6.  **Разработать компоненты:** Создать UI-компоненты для всех страниц.
-7.  **Интегрировать API:** Подключить Gemini API и Yandex Cloud Bucket.
+*   **Framework:** Next.js with TypeScript.
+*   **Styling:** Tailwind CSS.
+*   **Layout:** Standard header-content-footer layout.
+*   **Color Palette:** Primarily uses shades of gray, with blue as an accent color.
+*   **Typography:** Clean, sans-serif fonts (Geist Sans).
+
+## Features
+
+*   **Home Page:**
+    *   Hero section with a call-to-action.
+    *   Featured properties section.
+    *   "About Us" section.
+*   **Navigation:**
+    *   Header with links to main sections of the site.
+*   **Property Catalog:**
+    *   Separate pages for apartments and houses.
+*   **Additional Sections:**
+    *   Blog, map, developers, and property constructor pages (currently placeholders).
+
+## Current Plan
+
+*   The immediate goal is to create a visually appealing and functional home page to serve as the main entry point for the application. All other pages are currently placeholders and will be developed in future iterations.

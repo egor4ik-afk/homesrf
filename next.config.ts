@@ -1,7 +1,22 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  output: 'standalone',
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.storage.yandexcloud.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.yandexcloud.net',
+      },
+    ],
+  },
+  experimental: {
+    ppr: 'incremental',
+  },
+}
 
-export default nextConfig;
+export default nextConfig
