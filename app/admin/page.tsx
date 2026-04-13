@@ -56,7 +56,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: { pag
           </tbody>
         </table>
       </div>
-      <Pagination totalPages={totalPages} />
+      <Pagination currentPage={currentPage} totalPages={totalPages} />
     </div>
   );
 }
