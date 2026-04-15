@@ -1,11 +1,14 @@
-
 import { getProperties, getTotalPages } from "@/app/actions/admin";
 import Pagination from "@/app/catalog/Pagination";
 import Link from "next/link";
+import { Suspense } from "react"; // 1. Импортируем Suspense
 
-export default async function AdminPage({ searchParams }: { searchParams?: { page?: string; } }) {
-  const currentPage = Number(searchParams?.page) || 1;
+// 2. В новых версиях Next.js searchParams — это Promise
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const resolvedParams = await searchParams;
+  const currentPage = Number(resolvedParams?.page) || 1;
   const itemsPerPage = 10;
+  
   const properties = await getProperties(itemsPerPage, currentPage);
   const totalPages = await getTotalPages(itemsPerPage);
 
@@ -48,7 +51,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: { pag
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" />
                       </svg>
                     </Link>
-                    {/* Add delete button here */}
+                    {/* Кнопка удаления будет здесь */}
                   </div>
                 </td>
               </tr>
@@ -56,7 +59,11 @@ export default async function AdminPage({ searchParams }: { searchParams?: { pag
           </tbody>
         </table>
       </div>
-      <Pagination currentPage={currentPage} totalPages={totalPages} />
+      
+      {/* 3. Оборачиваем пагинацию в Suspense */}
+      <Suspense fallback={<div className="text-center py-4 text-gray-500">Загрузка страниц...</div>}>
+        <Pagination currentPage={currentPage} totalPages={totalPages} />
+      </Suspense>
     </div>
   );
 }

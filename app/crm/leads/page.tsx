@@ -1,7 +1,5 @@
-
 import { getLeads, updateLeadStatus } from "@/app/actions/crm";
 import Link from "next/link";
-import { useSearchParams } from 'next/navigation';
 
 function StatusFilter({ currentStatus }: { currentStatus: string | null | undefined }) {
   const statuses = ['new', 'contacted', 'qualified', 'closed'];
@@ -17,10 +15,12 @@ function StatusFilter({ currentStatus }: { currentStatus: string | null | undefi
   );
 }
 
-async function StatusChanger({ id, currentStatus }: { id: string, currentStatus: string }) {
+function StatusChanger({ id, currentStatus }: { id: string, currentStatus: string }) {
   const statuses = ['new', 'contacted', 'qualified', 'closed'];
+  
   return (
-    <form action={updateLeadStatus.bind(null, id)} className="flex items-center">
+    // ✅ ИСПРАВЛЕНО: Обернули вызов в анонимную функцию, которая ничего не возвращает
+    <form action={async (formData) => { await updateLeadStatus(id, formData); }} className="flex items-center">
       <select name="status" defaultValue={currentStatus} className="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
         {statuses.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
@@ -29,8 +29,10 @@ async function StatusChanger({ id, currentStatus }: { id: string, currentStatus:
   )
 }
 
-export default async function LeadsPage({ searchParams }: { searchParams: { status?: string }}) {
-  const status = searchParams.status;
+// В новых версиях Next.js searchParams — это Promise, поэтому мы его ждем
+export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const resolvedParams = await searchParams;
+  const status = resolvedParams?.status;
   const leads = await getLeads(status);
 
   return (
@@ -65,7 +67,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stat
                   <StatusChanger id={lead.id} currentStatus={lead.status} />
                 </td>
                 <td className="py-3 px-6 text-center">
-                  {new Date(lead.created_at).toLocaleString()}
+                  {new Date(lead.created_at).toLocaleString('ru-RU')}
                 </td>
                 <td className="py-3 px-6 text-center">
                   <Link href={`/crm/leads/${lead.id}`} className="text-blue-500 hover:underline">Детали</Link>

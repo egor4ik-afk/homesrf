@@ -1,4 +1,3 @@
-
 import sql from './db';
 
 // --- Типы и интерфейсы ---
@@ -127,7 +126,8 @@ export async function analyzePhoto(imageUrl: string): Promise<string[]> {
           {
             'role': 'user',
             'content': {
-                'text': \'\'\'Посмотри на это фото объекта недвижимости в Сочи. Определи что изображено. Верни ТОЛЬКО массив JSON с тегами на русском языке из этого списка: фасад, вид на горы, вид на море, бассейн, кухня, терраса, гараж, сад, гостиная, спальня, ванная, детская, кабинет, баня, беседка, забор, подвал, лестница, панорама, ремонт, отделка. Пример ответа: ["фасад","терраса","вид на горы"]\'\'\',
+                // ✅ ИСПРАВЛЕНО: Убраны экранированные одинарные кавычки, использованы обычные обратные кавычки
+                'text': `Посмотри на это фото объекта недвижимости в Сочи. Определи что изображено. Верни ТОЛЬКО массив JSON с тегами на русском языке из этого списка: фасад, вид на горы, вид на море, бассейн, кухня, терраса, гараж, сад, гостиная, спальня, ванная, детская, кабинет, баня, беседка, забор, подвал, лестница, панорама, ремонт, отделка. Пример ответа: ["фасад","терраса","вид на горы"]`,
                 'image': {
                     'mimeType': imageResponse.headers.get('content-type') || 'image/jpeg',
                     'base64Data': imageBase64
@@ -231,9 +231,10 @@ export async function processNewPhoto(photoUrl: string, propertyId: number): Pro
         }
 
         // 2-3. Получаем текущие медиа-данные из БД
-        const rows = await sql<[{media_urls: PropertyMedia[]}]>\`
-            SELECT media_urls FROM properties WHERE id = \${propertyId}
-        \`;
+        // ✅ ИСПРАВЛЕНО: Убраны экранированные символы в SQL запросе
+       const rows = await sql<{media_urls: PropertyMedia[]}[]>`
+            SELECT media_urls FROM properties WHERE id = ${propertyId}
+        `;
         
         if (rows.length === 0) {
             throw new Error(`Property with id ${propertyId} not found.`);
@@ -258,11 +259,12 @@ export async function processNewPhoto(photoUrl: string, propertyId: number): Pro
         }
         
         // 6. Сохраняем обновленный массив
-        await sql\`
+        // ✅ ИСПРАВЛЕНО: Убраны экранированные символы в SQL запросе
+        await sql`
             UPDATE properties 
-            SET media_urls = \${JSON.stringify(updatedMedia)}::jsonb 
-            WHERE id = \${propertyId}
-        \`;
+            SET media_urls = ${JSON.stringify(updatedMedia)}::jsonb 
+            WHERE id = ${propertyId}
+        `;
 
         // 7. Логирование
         console.log(`Photo tagged: ${photoUrl} → ${tags.join(', ')}`);
@@ -319,7 +321,8 @@ export async function generateSeoMeta(property: GenerateSeoMetaParams): Promise<
         const jsonString = data.result.alternatives[0].message.text;
         
         // Попытка извлечь JSON из ответа, даже если он обернут в markdown
-        const jsonMatch = jsonString.match(/```json\\n([\s\S]*?)\\n```/);
+        // ✅ ИСПРАВЛЕНО: Убраны лишние экранирования в регулярном выражении
+        const jsonMatch = jsonString.match(/```json\n([\s\S]*?)\n```/);
         const parsableString = jsonMatch ? jsonMatch[1] : jsonString;
         
         const parsedMeta = JSON.parse(parsableString);
