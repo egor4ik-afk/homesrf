@@ -1,8 +1,7 @@
-
 'use server';
 
 import { z } from 'zod';
-import { sql } from '@vercel/postgres';
+import sql from '@/lib/db'; // ✅ ИЗМЕНИЛИ: Теперь используем твой коннектор базы данных
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -48,7 +47,7 @@ export async function createProperty(formData: FormData) {
   try {
     await sql`
       INSERT INTO properties (title, type, district, price, area_total, address, description, developer_id, photos, created_at)
-      VALUES (${title}, ${type}, ${district}, ${price}, ${area_total}, ${address}, ${description}, ${developer_id}, ${photos}, ${date})
+      VALUES (${title}, ${type}, ${district}, ${price}, ${area_total}, ${address}, ${description}, ${developer_id}, ${photos as any}, ${date})
     `;
   } catch (error) {
     return {
@@ -85,7 +84,7 @@ export async function updateProperty(id: string, formData: FormData) {
   try {
     await sql`
       UPDATE properties
-      SET title = ${title}, type = ${type}, district = ${district}, price = ${price}, area_total = ${area_total}, address = ${address}, description = ${description}, developer_id = ${developer_id}, photos = ${photos}
+      SET title = ${title}, type = ${type}, district = ${district}, price = ${price}, area_total = ${area_total}, address = ${address}, description = ${description}, developer_id = ${developer_id}, photos = ${photos as any}
       WHERE id = ${id}
     `;
   } catch (error) {
@@ -110,7 +109,7 @@ export async function getProperties(itemsPerPage: number, currentPage: number) {
   const offset = (currentPage - 1) * itemsPerPage;
   try {
     const properties = await sql`SELECT * FROM properties LIMIT ${itemsPerPage} OFFSET ${offset}`;
-    return properties.rows;
+    return properties; // ✅ ИЗМЕНИЛИ: Возвращаем массив напрямую
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch properties.');
@@ -120,7 +119,7 @@ export async function getProperties(itemsPerPage: number, currentPage: number) {
 export async function getProperty(id: string) {
   try {
     const property = await sql`SELECT * FROM properties WHERE id = ${id}`;
-    return property.rows[0];
+    return property[0]; // ✅ ИЗМЕНИЛИ: Берем первый элемент из массива
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch property.');
@@ -130,7 +129,7 @@ export async function getProperty(id: string) {
 export async function getDevelopers() {
   try {
     const developers = await sql`SELECT id, name FROM developers`;
-    return developers.rows;
+    return developers; // ✅ ИЗМЕНИЛИ: Возвращаем массив напрямую
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch developers.');
@@ -140,7 +139,7 @@ export async function getDevelopers() {
 export async function getTotalPages(itemsPerPage: number) {
   try {
     const count = await sql`SELECT COUNT(*) FROM properties`;
-    const totalPages = Math.ceil(Number(count.rows[0].count) / itemsPerPage);
+    const totalPages = Math.ceil(Number(count[0].count) / itemsPerPage); // ✅ ИЗМЕНИЛИ: Берем count[0]
     return totalPages;
   } catch (error) {
     console.error('Database Error:', error);

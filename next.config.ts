@@ -34,7 +34,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "image.thum.io" },
       { protocol: "https", hostname: "avatars.yandex.net" },
       { protocol: "https", hostname: "api.dicebear.com" },
-      { protocol: "https", hostname: "storage.yandexcloud.net" }
+      { protocol: "https", hostname: "storage.yandexcloud.net" },
+      // ✅ Добавляем Unsplash для красивых заглушек
+      { protocol: "https", hostname: "images.unsplash.com" } 
     ],
   },
 };
