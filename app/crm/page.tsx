@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'; // ← вот это в самом верху файла
 
 import { getDashboardStats } from "@/app/actions/crm";
 import Link from "next/link";
