@@ -1,127 +1,110 @@
--- 0001_initial_schema.sql
+-- ============================================================
+-- RelaxNet — схема БД (общая, к ней позже подключится Gateway)
+-- Таблицы tarifs / vpn_servers / tarif_vpn_servers / users —
+-- это те же сущности, что на вашей диаграмме, только с явными
+-- именами и типами. otp_codes / sessions / payments — то, чего
+-- диаграмме не хватало под email+OTP и оплату.
+-- ============================================================
 
--- Enum Types
-CREATE TYPE property_type AS ENUM ('house', 'apartment', 'plot', 'complex');
-CREATE TYPE property_status AS ENUM ('active', 'sold', 'reserved');
-CREATE TYPE lead_status AS ENUM ('new', 'contacted', 'qualified', 'closed');
-CREATE TYPE company_label AS ENUM ('cold', 'warm', 'hot');
-
--- developers Table
-CREATE TABLE developers (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    slug VARCHAR(255) UNIQUE NOT NULL,
-    description TEXT,
-    rating NUMERIC(2, 1),
-    logo_url TEXT,
-    contacts JSONB,
-    website TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS tarifs (
+  id            SERIAL PRIMARY KEY,
+  name          TEXT NOT NULL UNIQUE,        -- 'STD' | 'PRO'
+  price_rub     NUMERIC(10,2) NOT NULL,
+  duration_days INTEGER NOT NULL DEFAULT 30,
+  status        TEXT NOT NULL DEFAULT 'active' -- active | hidden
 );
 
--- properties Table
-CREATE TABLE properties (
-    id SERIAL PRIMARY KEY,
-    slug VARCHAR(255) UNIQUE NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    price NUMERIC(15, 2),
-    price_per_sqm NUMERIC(10, 2),
-    type property_type NOT NULL,
-    status property_status DEFAULT 'active',
-    area_total NUMERIC(8, 2),
-    area_living NUMERIC(8, 2),
-    floors INT,
-    rooms INT,
-    address TEXT,
-    district VARCHAR(100),
-    lat NUMERIC(9, 6),
-    lng NUMERIC(9, 6),
-    media_urls JSONB,
-    developer_id INT REFERENCES developers(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    seo_meta JSONB
+CREATE TABLE IF NOT EXISTS vpn_servers (
+  id                 SERIAL PRIMARY KEY,
+  ip                 TEXT NOT NULL UNIQUE,
+  name               TEXT NOT NULL,
+  assign_country     TEXT,
+  is_healthy         BOOLEAN NOT NULL DEFAULT TRUE,
+  last_health_check  TIMESTAMPTZ
 );
 
--- leads Table
-CREATE TABLE leads (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(50) NOT NULL,
-    email VARCHAR(255),
-    message TEXT,
-    property_id INT REFERENCES properties(id) ON DELETE SET NULL,
-    source_url TEXT,
-    status lead_status DEFAULT 'new',
-    futyms_id VARCHAR(255),
-    utm_source VARCHAR(255),
-    utm_medium VARCHAR(255),
-    utm_campaign VARCHAR(255),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- General Settings VPN server — с диаграммы: настройки/правила
+-- формирования конфигов, которые нужны серверу в hot reload
+CREATE TABLE IF NOT EXISTS vpn_server_settings (
+  vpn_server_id INTEGER PRIMARY KEY REFERENCES vpn_servers(id) ON DELETE CASCADE,
+  settings      JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
--- articles Table
-CREATE TABLE articles (
-    id SERIAL PRIMARY KEY,
-    slug VARCHAR(255) UNIQUE NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    excerpt TEXT,
-    tags TEXT[],
-    author VARCHAR(100),
-    published_at TIMESTAMPTZ,
-    cover_image_url TEXT,
-    seo_meta JSONB
+CREATE TABLE IF NOT EXISTS tarif_vpn_servers (
+  id            SERIAL PRIMARY KEY,
+  tarif_id      INTEGER NOT NULL REFERENCES tarifs(id) ON DELETE CASCADE,
+  vpn_server_id INTEGER NOT NULL REFERENCES vpn_servers(id) ON DELETE CASCADE,
+  UNIQUE (tarif_id, vpn_server_id)
 );
 
--- companies Table (CRM for partners)
-CREATE TABLE companies (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100),
-    contacts JSONB,
-    notes TEXT,
-    label company_label,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS users (
+  id                       SERIAL PRIMARY KEY,
+  email                    TEXT UNIQUE NOT NULL,
+  tarif_id                 INTEGER REFERENCES tarifs(id),
+  vpn_server_id            INTEGER REFERENCES vpn_servers(id),
+  status                   TEXT NOT NULL DEFAULT 'inactive', -- inactive | active | expired
+  subscription_expires_at  TIMESTAMPTZ,
+  vpn_key                  TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- link_tracking Table
-CREATE TABLE link_tracking (
-    id SERIAL PRIMARY KEY,
-    lead_id INT REFERENCES leads(id) ON DELETE CASCADE,
-    utm_source VARCHAR(255),
-    utm_medium VARCHAR(255),
-    utm_campaign VARCHAR(255),
-    referrer TEXT,
-    clicked_at TIMESTAMPTZ DEFAULT NOW()
+-- Одноразовые коды для входа по email
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id          SERIAL PRIMARY KEY,
+  email       TEXT NOT NULL,
+  code        TEXT NOT NULL,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
 
--- Indexes for performance
-CREATE INDEX idx_properties_slug ON properties(slug);
-CREATE INDEX idx_properties_type ON properties(type);
-CREATE INDEX idx_properties_district ON properties(district);
-CREATE INDEX idx_properties_status ON properties(status);
-CREATE INDEX idx_properties_developer_id ON properties(developer_id);
-CREATE INDEX idx_developers_slug ON developers(slug);
-CREATE INDEX idx_articles_slug ON articles(slug);
+-- Сессии — токен из httpOnly cookie ищем здесь (без JWT, проще ротировать/отзывать)
+CREATE TABLE IF NOT EXISTS sessions (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token       TEXT UNIQUE NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 
--- Trigger to update 'updated_at' timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-   NEW.updated_at = NOW();
-   RETURN NEW;
-END;
-$$ LANGUAGE 'plpgsql';
+-- Платежи через ЮKassa
+CREATE TABLE IF NOT EXISTS payments (
+  id                    SERIAL PRIMARY KEY,
+  user_id               INTEGER NOT NULL REFERENCES users(id),
+  tarif_id              INTEGER NOT NULL REFERENCES tarifs(id),
+  amount                NUMERIC(10,2) NOT NULL,
+  currency              TEXT NOT NULL DEFAULT 'RUB',
+  provider              TEXT NOT NULL DEFAULT 'yookassa',
+  provider_payment_id   TEXT UNIQUE,
+  status                TEXT NOT NULL DEFAULT 'pending', -- pending | succeeded | canceled
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_id ON payments(provider_payment_id);
 
-CREATE TRIGGER update_properties_updated_at
-BEFORE UPDATE ON properties
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+-- ============================================================
+-- Сид: один тариф PRO включён, STD — заведён, но скрыт (status
+-- = 'hidden'), чтобы включить его позже без миграций. Один
+-- плейсхолдер VPN-сервера — замените на реальный при разворачивании.
+-- ============================================================
 
-CREATE TRIGGER update_companies_updated_at
-BEFORE UPDATE ON companies
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+INSERT INTO tarifs (name, price_rub, duration_days, status)
+VALUES ('PRO', 299.00, 30, 'active')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO tarifs (name, price_rub, duration_days, status)
+VALUES ('STD', 149.00, 30, 'hidden')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO vpn_servers (ip, name, assign_country, is_healthy)
+VALUES ('0.0.0.0', 'placeholder-server', 'RU', TRUE)
+ON CONFLICT (ip) DO NOTHING;
+
+-- Привязываем PRO к плейсхолдер-серверу, чтобы issueVpnKey() было из чего выбрать
+INSERT INTO tarif_vpn_servers (tarif_id, vpn_server_id)
+SELECT t.id, vs.id FROM tarifs t, vpn_servers vs
+WHERE t.name = 'PRO' AND vs.ip = '0.0.0.0'
+ON CONFLICT (tarif_id, vpn_server_id) DO NOTHING;

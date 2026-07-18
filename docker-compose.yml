@@ -1,0 +1,18 @@
+services:
+  relaxnet:
+    build: .
+    container_name: relaxnet
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.relaxnet.rule=Host(`relaxnet.pro`) || Host(`www.relaxnet.pro`)
+      - traefik.http.routers.relaxnet.entrypoints=websecure
+      - traefik.http.routers.relaxnet.tls.certresolver=le
+      - traefik.http.services.relaxnet.loadbalancer.server.port=3000
+
+networks:
+  traefik:
+    external: true

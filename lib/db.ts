@@ -1,13 +1,18 @@
-import postgres from 'postgres'
+import postgres from 'postgres';
 
-const sql = postgres(process.env.DATABASE_URL!, {
+// Гарантирует валидный URL на этапе сборки, даже если DATABASE_URL ещё не задан
+function getSafeUrl() {
+  const url = process.env.DATABASE_URL;
+  if (!url || typeof url !== 'string' || !url.startsWith('postgres')) {
+    return 'postgres://dummy:dummy@localhost:5432/dummy';
+  }
+  return url;
+}
+
+const sql = postgres(getSafeUrl(), {
   ssl: 'require',
-  max: 5,
+  max: 10,
   idle_timeout: 20,
-  connect_timeout: 15,
-  connection: {
-    application_name: 'homesrf',
-  },
-})
+});
 
-export default sql
+export default sql;
