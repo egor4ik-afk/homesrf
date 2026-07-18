@@ -1,0 +1,129 @@
+// Схема повторяет db/schema.sql через @map/@@map — имена таблиц и колонок
+// в базе остаются snake_case, как их ждут raw SQL-запросы в lib/db.ts и
+// route-хендлерах. Сама Prisma в этом MVP используется только как
+// инструмент миграций/сидов (`prisma db push`, `prisma db seed`) —
+// в рантайме приложение продолжает ходить в БД через postgres.js
+// (см. README → "Prisma vs. postgres.js").
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tarif {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique // 'STD' | 'PRO'
+  priceRub     Decimal @map("price_rub") @db.Decimal(10, 2)
+  durationDays Int     @default(30) @map("duration_days")
+  status       String  @default("active") // active | hidden
+
+  users           User[]
+  tarifVpnServers TarifVpnServer[]
+  payments        Payment[]
+
+  @@map("tarifs")
+}
+
+model VpnServer {
+  id              Int       @id @default(autoincrement())
+  ip              String    @unique
+  name            String
+  assignCountry   String?   @map("assign_country")
+  isHealthy       Boolean   @default(true) @map("is_healthy")
+  lastHealthCheck DateTime? @map("last_health_check") @db.Timestamptz
+
+  settings        VpnServerSettings?
+  tarifVpnServers TarifVpnServer[]
+  users           User[]
+
+  @@map("vpn_servers")
+}
+
+// General Settings VPN server — с исходной диаграммы: настройки/правила
+// формирования конфигов, которые нужны серверу в hot reload
+model VpnServerSettings {
+  vpnServerId Int  @id @map("vpn_server_id")
+  settings    Json @default("{}")
+
+  vpnServer VpnServer @relation(fields: [vpnServerId], references: [id], onDelete: Cascade)
+
+  @@map("vpn_server_settings")
+}
+
+model TarifVpnServer {
+  id          Int @id @default(autoincrement())
+  tarifId     Int @map("tarif_id")
+  vpnServerId Int @map("vpn_server_id")
+
+  tarif     Tarif     @relation(fields: [tarifId], references: [id], onDelete: Cascade)
+  vpnServer VpnServer @relation(fields: [vpnServerId], references: [id], onDelete: Cascade)
+
+  @@unique([tarifId, vpnServerId])
+  @@map("tarif_vpn_servers")
+}
+
+model User {
+  id                     Int       @id @default(autoincrement())
+  email                  String    @unique
+  tarifId                Int?      @map("tarif_id")
+  vpnServerId            Int?      @map("vpn_server_id")
+  status                 String    @default("inactive") // inactive | active | expired
+  subscriptionExpiresAt  DateTime? @map("subscription_expires_at") @db.Timestamptz
+  vpnKey                 String?   @map("vpn_key")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  tarif     Tarif?     @relation(fields: [tarifId], references: [id])
+  vpnServer VpnServer? @relation(fields: [vpnServerId], references: [id])
+  sessions  Session[]
+  payments  Payment[]
+
+  @@map("users")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  email     String
+  code      String
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([email])
+  @@map("otp_codes")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("sessions")
+}
+
+model Payment {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  tarifId           Int      @map("tarif_id")
+  amount            Decimal  @db.Decimal(10, 2)
+  currency          String   @default("RUB")
+  provider          String   @default("yookassa")
+  providerPaymentId String?  @unique @map("provider_payment_id")
+  status            String   @default("pending") // pending | succeeded | canceled
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user  User  @relation(fields: [userId], references: [id])
+  tarif Tarif @relation(fields: [tarifId], references: [id])
+
+  @@map("payments")
+}

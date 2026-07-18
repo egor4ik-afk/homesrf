@@ -36,19 +36,53 @@ db/schema.sql  — вся схема + сид (тариф PRO, скрытый ST
 ## Локальный запуск
 
 ```bash
-npm install
-cp .env.example .env   # заполнить DATABASE_URL, SMTP_*, YOOKASSA_*
+npm install          # postinstall сам вызовет `prisma generate`
+cp .env.example .env # заполнить DATABASE_URL, SMTP_*, YOOKASSA_*
 ```
 
-Применить схему к БД:
+Применить схему к БД — через Prisma (рекомендуемый путь):
 
 ```bash
-psql "$DATABASE_URL" -f db/schema.sql
+npx prisma db push   # создаёт таблицы по prisma/schema.prisma
+npx prisma db seed   # тарифы PRO/STD + плейсхолдер-сервер, см. prisma/seed.ts
 ```
+
+`db/schema.sql` — тот же результат в чистом SQL, оставлен как читаемый референс
+и как альтернативный способ применить схему вручную (`psql "$DATABASE_URL" -f db/schema.sql`),
+если Prisma в проде почему-то не нужна. Изменения в схему вносите в
+`prisma/schema.prisma` и синхронно правьте `db/schema.sql` — это два
+представления одной и той же структуры, автогенерации между ними нет.
 
 ```bash
 npm run dev
 ```
+
+## Prisma vs. postgres.js — почему и то, и другое
+
+`prisma/schema.prisma` — источник истины для структуры БД и миграций
+(`db:push` / `db:migrate` / `db:seed`, ниже). В рантайме сам Next.js-код
+(`lib/db.ts`, route-хендлеры) ходит в БД напрямую через `postgres.js`
+тегированными шаблонами — так уже было сделано в Relaxdev, и raw SQL здесь
+удобнее для точечных JOIN'ов и `INTERVAL`-арифметики в `payment/webhook`.
+
+Если хотите вместо этого писать запросы через Prisma Client — модели уже
+именованы и промаплены (`@map`/`@@map`) на те же таблицы/колонки, так что
+переезд возможен без миграции данных, просто заменой `sql\`...\`` на
+`prisma.user.findFirst(...)` и т.п. Скажите — перепишу.
+
+## Полезные Prisma-команды
+
+```bash
+npx prisma studio     # GUI для просмотра/редактирования данных
+npx prisma db push    # синхронизировать таблицы под текущую schema.prisma
+npx prisma db seed    # прогнать prisma/seed.ts
+npx prisma migrate dev --name init   # если нужна история миграций, а не просто push
+```
+
+**Важно:** в этой песочнице нет доступа к `binaries.prisma.sh`, поэтому
+`prisma generate` / `db push` здесь не запускались — только вручную сверил
+схему построчно с `db/schema.sql`. На вашей машине с обычным интернетом
+всё должно поставиться штатно через `npm install`.
 
 ## Переменные окружения
 
