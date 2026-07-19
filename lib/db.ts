@@ -1,6 +1,5 @@
 import postgres from 'postgres';
 
-// Гарантирует валидный URL на этапе сборки, даже если DATABASE_URL ещё не задан
 function getSafeUrl() {
   const url = process.env.DATABASE_URL;
   if (!url || typeof url !== 'string' || !url.startsWith('postgres')) {
@@ -10,7 +9,7 @@ function getSafeUrl() {
 }
 
 const sql = postgres(getSafeUrl(), {
-  ssl: 'require',
+  ssl: false,
   max: 10,
   idle_timeout: 20,
 });
