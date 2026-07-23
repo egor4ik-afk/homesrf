@@ -5,14 +5,14 @@ const prisma = new PrismaClient();
 async function main() {
   const pro = await prisma.tarif.upsert({
     where: { name: 'PRO' },
-    update: {},
-    create: { name: 'PRO', priceRub: 299, durationDays: 30, status: 'active' },
+    update: { priceRub: 199, maxConnections: 3 },
+    create: { name: 'PRO', priceRub: 199, durationDays: 30, maxConnections: 3, status: 'active' },
   });
 
   await prisma.tarif.upsert({
     where: { name: 'STD' },
     update: {},
-    create: { name: 'STD', priceRub: 149, durationDays: 30, status: 'hidden' },
+    create: { name: 'STD', priceRub: 149, durationDays: 30, maxConnections: 1, status: 'hidden' },
   });
 
   const server = await prisma.vpnServer.upsert({

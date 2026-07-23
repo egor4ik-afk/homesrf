@@ -47,12 +47,27 @@ export async function POST(req: NextRequest) {
 
   const vpnKey = await issueVpnKey(userId, tarif.id as number);
 
+  // Сохраняем карту, только если ЮKassa реально её сохранила (пользователь
+  // согласился на странице оплаты) — иначе payment_method.saved будет false,
+  // и мы просто не трогаем то, что уже было в профиле (COALESCE ниже).
+  const savedCard =
+    payment.payment_method?.type === 'bank_card' && payment.payment_method.saved
+      ? {
+          paymentMethodId: payment.payment_method.id,
+          last4: payment.payment_method.card?.last4 ?? null,
+          cardType: payment.payment_method.card?.card_type ?? null,
+        }
+      : null;
+
   await sql`
     UPDATE users SET
       tarif_id = ${tarif.id},
       status = 'active',
       subscription_expires_at = NOW() + (${tarif.duration_days} || ' days')::interval,
       vpn_key = ${vpnKey},
+      payment_method_id = COALESCE(${savedCard?.paymentMethodId ?? null}, payment_method_id),
+      card_last4 = COALESCE(${savedCard?.last4 ?? null}, card_last4),
+      card_type = COALESCE(${savedCard?.cardType ?? null}, card_type),
       updated_at = NOW()
     WHERE id = ${userId}
   `;

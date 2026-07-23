@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { DOWNLOADS_URL } from './constants';
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -29,8 +30,6 @@ export async function sendOtpEmail(to: string, code: string) {
 }
 
 export async function sendVpnKeyEmail(to: string, vpnKey: string, tarifName: string) {
-  const downloadsUrl = process.env.NEXT_PUBLIC_DOWNLOADS_URL || '';
-
   await transporter.sendMail({
     from: FROM,
     to,
@@ -44,8 +43,8 @@ export async function sendVpnKeyEmail(to: string, vpnKey: string, tarifName: str
           ${vpnKey}
         </div>
         <p style="color:#444">
-          1. Скачайте клиент RelaxNet для вашего устройства:
-          <a href="${downloadsUrl}">${downloadsUrl}</a><br/>
+          1. Скачайте клиент Amnezia для вашего устройства:
+          <a href="${DOWNLOADS_URL}">${DOWNLOADS_URL}</a><br/>
           2. Откройте приложение → «Добавить подключение» → «Вставить ключ».<br/>
           3. Вставьте ключ выше и нажмите «Подключиться».
         </p>

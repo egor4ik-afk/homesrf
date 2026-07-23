@@ -8,6 +8,7 @@ interface Tarif {
   name: string;
   priceRub: number;
   durationDays: number;
+  maxConnections: number;
 }
 
 interface UserData {
@@ -18,6 +19,8 @@ interface UserData {
   vpn_key: string | null;
   tarif_id: number | null;
   tarif_name: string | null;
+  card_last4: string | null;
+  card_type: string | null;
 }
 
 const PLATFORMS = ['Windows', 'macOS', 'iOS', 'Android', 'Linux'] as const;
@@ -36,6 +39,7 @@ export default function ProfileClient({
   const [user, setUser] = useState(initialUser);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [unlinking, setUnlinking] = useState(false);
   const [platform, setPlatform] = useState<typeof PLATFORMS[number]>('Windows');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -88,6 +92,20 @@ export default function ProfileClient({
     }
   }
 
+  async function unlinkCard() {
+    setError('');
+    setUnlinking(true);
+    try {
+      const res = await fetch('/api/payment/unlink-card', { method: 'POST' });
+      if (!res.ok) throw new Error('Не удалось отвязать карту');
+      setUser((u) => ({ ...u, card_last4: null, card_type: null }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setUnlinking(false);
+    }
+  }
+
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
@@ -131,7 +149,7 @@ export default function ProfileClient({
             >
               {payingId === t.id
                 ? 'Переходим к оплате…'
-                : `Оплатить ${t.name} — ${t.priceRub.toFixed(0)} ₽ / ${t.durationDays} дн.`}
+                : `Оплатить ${t.name} — ${t.priceRub.toFixed(0)} ₽ / ${t.durationDays} дн. · до ${t.maxConnections} устройств`}
             </button>
           ))}
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
@@ -147,6 +165,25 @@ export default function ProfileClient({
         </section>
       )}
 
+      {/* Сохранённая карта */}
+      {user.card_last4 && (
+        <section className="rounded-xl border border-border bg-card p-6 mb-6">
+          <p className="text-white/60 text-sm mb-2">Способ оплаты</p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">
+              {user.card_type || 'Карта'} •••• {user.card_last4}
+            </span>
+            <button
+              onClick={unlinkCard}
+              disabled={unlinking}
+              className="text-red-400 text-sm hover:text-red-300 disabled:opacity-50"
+            >
+              {unlinking ? 'Отвязываем…' : 'Отвязать карту'}
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Скачивание клиента + инструкция */}
       <section className="rounded-xl border border-border bg-card p-6">
         <p className="text-white/60 text-sm mb-3">Скачать клиент и подключиться</p>
@@ -158,7 +195,7 @@ export default function ProfileClient({
             rel="noopener noreferrer"
             className="inline-block px-5 py-2.5 rounded-lg border border-border hover:border-white/40 text-sm mb-5"
           >
-            Скачать клиент RelaxNet →
+            Скачать клиент Amnezia →
           </a>
         )}
 
@@ -177,7 +214,7 @@ export default function ProfileClient({
         </div>
 
         <ol className="text-white/60 text-sm space-y-1.5 list-decimal list-inside">
-          <li>Установите и откройте клиент RelaxNet для {platform}.</li>
+          <li>Установите и откройте клиент Amnezia для {platform}.</li>
           <li>Нажмите «Добавить подключение» → «Вставить ключ».</li>
           <li>Вставьте ключ из письма или из блока выше и нажмите «Подключиться».</li>
         </ol>

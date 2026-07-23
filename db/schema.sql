@@ -7,11 +7,12 @@
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS tarifs (
-  id            SERIAL PRIMARY KEY,
-  name          TEXT NOT NULL UNIQUE,        -- 'STD' | 'PRO'
-  price_rub     NUMERIC(10,2) NOT NULL,
-  duration_days INTEGER NOT NULL DEFAULT 30,
-  status        TEXT NOT NULL DEFAULT 'active' -- active | hidden
+  id              SERIAL PRIMARY KEY,
+  name            TEXT NOT NULL UNIQUE,        -- 'STD' | 'PRO'
+  price_rub       NUMERIC(10,2) NOT NULL,
+  duration_days   INTEGER NOT NULL DEFAULT 30,
+  max_connections INTEGER NOT NULL DEFAULT 1,  -- сколько устройств одновременно
+  status          TEXT NOT NULL DEFAULT 'active' -- active | hidden
 );
 
 CREATE TABLE IF NOT EXISTS vpn_servers (
@@ -45,6 +46,9 @@ CREATE TABLE IF NOT EXISTS users (
   status                   TEXT NOT NULL DEFAULT 'inactive', -- inactive | active | expired
   subscription_expires_at  TIMESTAMPTZ,
   vpn_key                  TEXT,
+  payment_method_id        TEXT,   -- сохранённый способ оплаты в ЮKassa (для будущих автоплатежей)
+  card_last4               TEXT,   -- последние 4 цифры карты, только для отображения в профиле
+  card_type                TEXT,   -- MasterCard | Visa | Mir и т.п.
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -91,12 +95,12 @@ CREATE INDEX IF NOT EXISTS idx_payments_provider_id ON payments(provider_payment
 -- плейсхолдер VPN-сервера — замените на реальный при разворачивании.
 -- ============================================================
 
-INSERT INTO tarifs (name, price_rub, duration_days, status)
-VALUES ('PRO', 299.00, 30, 'active')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO tarifs (name, price_rub, duration_days, max_connections, status)
+VALUES ('PRO', 199.00, 30, 3, 'active')
+ON CONFLICT (name) DO UPDATE SET price_rub = 199.00, max_connections = 3;
 
-INSERT INTO tarifs (name, price_rub, duration_days, status)
-VALUES ('STD', 149.00, 30, 'hidden')
+INSERT INTO tarifs (name, price_rub, duration_days, max_connections, status)
+VALUES ('STD', 149.00, 30, 1, 'hidden')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO vpn_servers (ip, name, assign_country, is_healthy)

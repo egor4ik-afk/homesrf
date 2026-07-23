@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import sql from '@/lib/db';
+import { DOWNLOADS_URL } from '@/lib/constants';
 import ProfileClient from '@/components/ProfileClient';
 
 export default async function ProfilePage() {
@@ -9,7 +10,7 @@ export default async function ProfilePage() {
   if (!user) redirect('/login');
 
   const tarifs = await sql`
-    SELECT id, name, price_rub, duration_days
+    SELECT id, name, price_rub, duration_days, max_connections
     FROM tarifs
     WHERE status = 'active'
     ORDER BY price_rub DESC
@@ -25,6 +26,8 @@ export default async function ProfilePage() {
     vpn_key: user.vpn_key,
     tarif_id: user.tarif_id,
     tarif_name: user.tarif_name,
+    card_last4: user.card_last4,
+    card_type: user.card_type,
   };
 
   return (
@@ -36,8 +39,9 @@ export default async function ProfilePage() {
           name: t.name as string,
           priceRub: Number(t.price_rub),
           durationDays: t.duration_days as number,
+          maxConnections: t.max_connections as number,
         }))}
-        downloadsUrl={process.env.NEXT_PUBLIC_DOWNLOADS_URL || ''}
+        downloadsUrl={DOWNLOADS_URL}
       />
     </Suspense>
   );

@@ -10,6 +10,12 @@ export interface YooKassaPayment {
   id: string;
   status: 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled';
   confirmation?: { type: string; confirmation_url: string };
+  payment_method?: {
+    type: string;
+    id: string;
+    saved: boolean;
+    card?: { last4: string; card_type: string };
+  };
   metadata?: Record<string, unknown>;
 }
 
@@ -35,6 +41,11 @@ export async function createPayment(
       },
       capture: true,
       description,
+      // Просим ЮKassa сохранить карту — своё согласие/чекбокс на сохранение
+      // пользователю показывает сама ЮKassa на странице оплаты. Если пользователь
+      // не согласится, payment_method.saved в ответе просто будет false —
+      // ничего сохранять не станем (см. webhook).
+      save_payment_method: true,
       metadata,
     }),
   });
