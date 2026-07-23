@@ -45,7 +45,7 @@ export async function createPayment(
       // пользователю показывает сама ЮKassa на странице оплаты. Если пользователь
       // не согласится, payment_method.saved в ответе просто будет false —
       // ничего сохранять не станем (см. webhook).
-      save_payment_method: true,
+      save_payment_method: false,
       metadata,
     }),
   });
