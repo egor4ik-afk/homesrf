@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import VpnKeyBlock from './VpnKeyBlock';
 
 interface Tarif {
   id: number;
@@ -156,14 +157,7 @@ export default function ProfileClient({
       </section>
 
       {/* Ключ */}
-      {user.vpn_key && (
-        <section className="rounded-xl border border-border bg-card p-6 mb-6">
-          <p className="text-white/60 text-sm mb-2">Ваш ключ подключения</p>
-          <div className="font-mono text-xs bg-bg border border-border rounded-lg p-3 break-all">
-            {user.vpn_key}
-          </div>
-        </section>
-      )}
+      {isActive && user.vpn_key && <VpnKeyBlock config={user.vpn_key} />}
 
       {/* Сохранённая карта */}
       {/* {user.card_last4 && (
