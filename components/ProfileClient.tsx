@@ -166,7 +166,7 @@ export default function ProfileClient({
       )}
 
       {/* Сохранённая карта */}
-      {user.card_last4 && (
+      {/* {user.card_last4 && (
         <section className="rounded-xl border border-border bg-card p-6 mb-6">
           <p className="text-white/60 text-sm mb-2">Способ оплаты</p>
           <div className="flex items-center justify-between">
@@ -182,7 +182,7 @@ export default function ProfileClient({
             </button>
           </div>
         </section>
-      )}
+      )} */}
 
       {/* Скачивание клиента + инструкция */}
       <section className="rounded-xl border border-border bg-card p-6">

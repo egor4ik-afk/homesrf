@@ -15,13 +15,14 @@ datasource db {
 }
 
 model Tarif {
-  id             Int     @id @default(autoincrement())
-  name           String  @unique // 'STD' | 'PRO'
-  priceRub       Decimal @map("price_rub") @db.Decimal(10, 2)
-  durationDays   Int     @default(30) @map("duration_days")
-  maxConnections Int     @default(1) @map("max_connections")
-  status         String  @default("active") // active | hidden
-  lavaOfferId    String? @map("lava_offer_id") // оффер подписки в lava.top
+  id                 Int     @id @default(autoincrement())
+  name               String  @unique // 'STD' | 'PRO'
+  priceRub           Decimal @map("price_rub") @db.Decimal(10, 2)
+  durationDays       Int     @default(30) @map("duration_days")
+  maxConnections     Int     @default(1) @map("max_connections")
+  status             String  @default("active") // active | hidden
+  lavaOfferId        String? @map("lava_offer_id") // оффер-подписка (карта)
+  lavaOfferIdOnetime String? @map("lava_offer_id_onetime")  // разовый оффер (СБП)
 
   users           User[]
   tarifVpnServers TarifVpnServer[]
@@ -37,10 +38,12 @@ model VpnServer {
   assignCountry   String?   @map("assign_country")
   isHealthy       Boolean   @default(true) @map("is_healthy")
   lastHealthCheck DateTime? @map("last_health_check") @db.Timestamptz
+  sshHost         String?   @map("ssh_host")
 
   settings        VpnServerSettings?
   tarifVpnServers TarifVpnServer[]
   users           User[]
+  vpnClients      VpnClient[]
 
   @@map("vpn_servers")
 }
@@ -82,10 +85,11 @@ model User {
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz
 
-  tarif     Tarif?     @relation(fields: [tarifId], references: [id])
-  vpnServer VpnServer? @relation(fields: [vpnServerId], references: [id])
-  sessions  Session[]
-  payments  Payment[]
+  tarif      Tarif?      @relation(fields: [tarifId], references: [id])
+  vpnServer  VpnServer?  @relation(fields: [vpnServerId], references: [id])
+  sessions   Session[]
+  payments   Payment[]
+  vpnClients VpnClient[]
 
   @@map("users")
 }
@@ -131,4 +135,22 @@ model Payment {
   tarif Tarif @relation(fields: [tarifId], references: [id])
 
   @@map("payments")
+}
+
+model VpnClient {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  vpnServerId  Int       @map("vpn_server_id")
+  publicKey    String    @map("public_key")
+  privateKey   String    @map("private_key")
+  presharedKey String    @map("preshared_key")
+  allowedIp    String    @map("allowed_ip")
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user      User      @relation(fields: [userId], references: [id])
+  vpnServer VpnServer @relation(fields: [vpnServerId], references: [id])
+
+  @@unique([vpnServerId, allowedIp])
+  @@map("vpn_clients")
 }
