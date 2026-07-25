@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import sql from './db';
+import { Client } from 'ssh2';
 
 const execFileAsync = promisify(execFile);
 
@@ -63,24 +64,35 @@ async function allocateIp(serverId: number, subnet: string): Promise<string> {
 
 // ---------------------------------------------------------------- SSH
 
-async function sshExec(host: string, command: string): Promise<string> {
-  const keyPath = process.env.VPN_SSH_KEY_PATH;
-  if (!keyPath) throw new Error('VPN_SSH_KEY_PATH не задан');
-  const user = process.env.VPN_SSH_USER || 'root';
+function sshExec(host: string, command: string): Promise<string> {
+  const keyB64 = process.env.VPN_SSH_KEY_B64;
+  if (!keyB64) throw new Error('VPN_SSH_KEY_B64 не задан');
+  const privateKey = Buffer.from(keyB64, 'base64').toString('utf8');
+  const username = process.env.VPN_SSH_USER || 'root';
 
-  const { stdout } = await execFileAsync(
-    'ssh',
-    [
-      '-i', keyPath,
-      '-o', 'StrictHostKeyChecking=accept-new',
-      '-o', 'ConnectTimeout=10',
-      '-o', 'BatchMode=yes',
-      `${user}@${host}`,
-      command,
-    ],
-    { timeout: 20_000 }
-  );
-  return stdout;
+  return new Promise((resolve, reject) => {
+    const conn = new Client();
+    const chunks: Buffer[] = [];
+    const timer = setTimeout(() => { conn.end(); reject(new Error('ssh timeout')); }, 20_000);
+
+    conn
+      .on('ready', () => {
+        conn.exec(command, (err, stream) => {
+          if (err) { clearTimeout(timer); conn.end(); return reject(err); }
+          stream
+            .on('data', (d: Buffer) => chunks.push(d))
+            .on('close', (code: number) => {
+              clearTimeout(timer);
+              conn.end();
+              code === 0
+                ? resolve(Buffer.concat(chunks).toString())
+                : reject(new Error(`ssh exit ${code}: ${Buffer.concat(chunks).toString()}`));
+            });
+        });
+      })
+      .on('error', (e) => { clearTimeout(timer); reject(e); })
+      .connect({ host, port: 22, username, privateKey, readyTimeout: 10_000 });
+  });
 }
 
 // значения идут в shell-команду — валидируем жёстко вместо экранирования
@@ -97,7 +109,7 @@ async function addPeerOnNode(host: string, pub: string, psk: string, ip: string)
     `printf '%s' '${psk}' | docker exec -i amnezia-awg2 sh -c 'cat > /tmp/psk'`,
     `docker exec amnezia-awg2 awg set awg0 peer '${pub}' preshared-key /tmp/psk allowed-ips ${ip}/32`,
     `docker exec amnezia-awg2 rm -f /tmp/psk`,
-    `docker exec amnezia-awg2 sh -c "printf '\\n[Peer]\\nPublicKey = ${pub}\\nPresharedKey = ${psk}\\nAllowedIPs = ${ip}/32\\n' >> /opt/amnezia/awg/awg0.conf"`,
+    `docker exec amnezia-awg2 sh -c "printf '\n[Peer]\nPublicKey = ${pub}\nPresharedKey = ${psk}\nAllowedIPs = ${ip}/32\n' >> /opt/amnezia/awg/awg0.conf"`,
   ].join(' && ');
   await sshExec(host, cmd);
 }
