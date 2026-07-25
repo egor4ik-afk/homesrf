@@ -55,3 +55,19 @@ export async function sendVpnKeyEmail(to: string, vpnKey: string, tarifName: str
     `,
   });
 }
+
+export async function sendRenewalEmail(to: string) {
+  await transporter.sendMail({
+    from: FROM,
+    to,
+    subject: 'Подписка RelaxNet продлена',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:420px;margin:0 auto;padding:24px">
+        <h2 style="margin:0 0 8px">RelaxNet</h2>
+        <p style="color:#444">Оплата прошла, подписка продлена ещё на месяц.
+        Ключ подключения не изменился — ничего перенастраивать не нужно.</p>
+        <p style="color:#888;font-size:13px">Управление подпиской — в профиле на relaxnet.pro.</p>
+      </div>
+    `,
+  });
+}

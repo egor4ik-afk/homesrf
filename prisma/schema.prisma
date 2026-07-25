@@ -122,6 +122,7 @@ model Payment {
   currency          String   @default("RUB")
   provider          String   @default("yookassa")
   providerPaymentId String?  @unique @map("provider_payment_id")
+  lavaOfferId    String? @map("lava_offer_id")
   status            String   @default("pending") // pending | succeeded | canceled
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz
