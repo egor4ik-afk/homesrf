@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import VpnKeyBlock from './VpnKeyBlock';
+import Link from 'next/link';
 
 interface Tarif {
   id: number;
@@ -52,8 +53,8 @@ export default function ProfileClient({
     new Date(user.subscription_expires_at) > new Date();
 
   // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
-  const userKeys = user.vpn_keys?.length 
-    ? user.vpn_keys 
+  const userKeys = user.vpn_keys?.length
+    ? user.vpn_keys
     : (user.vpn_key ? [user.vpn_key] : []);
 
   useEffect(() => {
@@ -124,9 +125,9 @@ export default function ProfileClient({
     try {
       const res = await fetch('/api/vpn/generate', { method: 'POST' });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error || 'Ошибка выпуска ключа');
-      
+
       // Добавляем новый ключ в стейт без перезагрузки
       setUser(prev => ({
         ...prev,
@@ -190,7 +191,7 @@ export default function ProfileClient({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
             {userKeys.length < MAX_KEYS && (
-              <button 
+              <button
                 onClick={generateNewKey}
                 className="text-sm border border-border hover:border-white/40 text-white px-3 py-1.5 rounded-lg transition"
               >
@@ -198,13 +199,13 @@ export default function ProfileClient({
               </button>
             )}
           </div>
-          
+
           <div className="space-y-6">
             {userKeys.map((keyConfig, index) => (
-              <VpnKeyBlock 
-                key={index} 
+              <VpnKeyBlock
+                key={index}
                 config={keyConfig} 
-                title={`Ключ устройства ${index + 1}`} 
+                title={`Ключ устройства ${index + 1}`}
               />
             ))}
           </div>
@@ -231,9 +232,8 @@ export default function ProfileClient({
             <button
               key={p}
               onClick={() => setPlatform(p)}
-              className={`px-3 py-1.5 rounded-md text-xs ${
-                platform === p ? 'bg-accent text-bg' : 'bg-bg text-white/50 border border-border'
-              }`}
+              className={`px-3 py-1.5 rounded-md text-xs ${platform === p ? 'bg-accent text-bg' : 'bg-bg text-white/50 border border-border'
+                }`}
             >
               {p}
             </button>
@@ -262,6 +262,24 @@ export default function ProfileClient({
           </li>
         </ul>
       </section>
+
+      <div className="mt-auto pt-6 border-t border-white/10 w-full max-w-md mx-auto text-center pb-8">
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-6 text-sm text-gray-500">
+          <Link
+            href="/privacy"
+            className="hover:text-gray-300 transition-colors"
+          >
+            Политика конфиденциальности
+          </Link>
+          <span className="hidden sm:inline text-gray-700">•</span>
+          <Link
+            href="/terms"
+            className="hover:text-gray-300 transition-colors"
+          >
+            Пользовательское соглашение
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }
