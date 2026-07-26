@@ -5,7 +5,6 @@ import sql from '@/lib/db';
 
 export async function POST() {
   try {
-    // 1. Получаем юзера из сессии
     const user = await getCurrentUser();
 
     if (!user || user.status !== 'active' || !user.tarif_id) {
@@ -15,10 +14,10 @@ export async function POST() {
       );
     }
 
-    // 2. Проверяем текущее количество активных ключей (пиров) в БД
+    // Проверяем лимит по количеству реально выданных конфигов
     const activeClients = await sql<{ count: number }[]>`
       SELECT COUNT(*) as count FROM vpn_clients 
-      WHERE user_id = ${user.id} AND revoked_at IS NULL
+      WHERE user_id = ${user.id} AND config_text IS NOT NULL
     `;
 
     if (activeClients[0].count >= 3) {
@@ -28,7 +27,6 @@ export async function POST() {
       );
     }
 
-    // 3. Генерируем новый ключ на сервере (запись в vpn_clients и SSH awg set внутри)
     const newConfig = await issueVpnKey(user.id, user.tarif_id);
 
     return NextResponse.json({ config: newConfig });

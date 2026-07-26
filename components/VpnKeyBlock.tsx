@@ -31,44 +31,33 @@ export default function VpnKeyBlock({ config, title }: { config: string, title?:
   const [platform, setPlatform] = useState<keyof typeof STEPS>('iPhone / iPad');
   
   const canvasAmneziaRef = useRef<HTMLCanvasElement>(null);
-  const canvasAwgRef = useRef<HTMLCanvasElement>(null);
-  const canvasRawRef = useRef<HTMLCanvasElement>(null);
+  const canvasWgRef = useRef<HTMLCanvasElement>(null);
 
-  // Генерируем безопасные ссылки
+  // Генерируем безопасную ссылку vpn://
   const amneziaLink = typeof window !== 'undefined' 
     ? `vpn://${btoa(unescape(encodeURIComponent(config)))}` 
-    : '';
-    
-  const awgLink = typeof window !== 'undefined' 
-    ? `awg://${btoa(unescape(encodeURIComponent(config)))}` 
     : '';
 
   useEffect(() => {
     if (tab === 'qr') {
-      // КРИТИЧНО: width 300 и errorCorrectionLevel 'L', иначе не прочитает!
       const qrOptions = {
-        width: 300,
+        width: 200,
         margin: 2,
-        errorCorrectionLevel: 'L' as const,
+        errorCorrectionLevel: 'M' as const,
         color: { dark: '#000000', light: '#ffffff' },
       };
       
-      // 1. QR для AmneziaVPN (ссылка vpn://)
+      // QR для Amnezia (ссылка)
       if (canvasAmneziaRef.current && amneziaLink) {
         QRCode.toCanvas(canvasAmneziaRef.current, amneziaLink, qrOptions);
       }
       
-      // 2. QR для AmneziaWG (ссылка awg://)
-      if (canvasAwgRef.current && awgLink) {
-        QRCode.toCanvas(canvasAwgRef.current, awgLink, qrOptions);
-      }
-      
-      // 3. QR для сырого конфига (стандартный WireGuard / AmneziaWG)
-      if (canvasRawRef.current) {
-        QRCode.toCanvas(canvasRawRef.current, config, qrOptions);
+      // QR для сырого конфига (WG)
+      if (canvasWgRef.current) {
+        QRCode.toCanvas(canvasWgRef.current, config, qrOptions);
       }
     }
-  }, [tab, config, amneziaLink, awgLink]);
+  }, [tab, config, amneziaLink]);
 
   function downloadConf() {
     const blob = new Blob([config], { type: 'text/plain' });
@@ -110,7 +99,7 @@ export default function VpnKeyBlock({ config, title }: { config: string, title?:
         ).map(([key, label]) => (
           <button
             key={key}
-            onClick={() => setTab(key as any)}
+            onClick={() => setTab(key)}
             className={`px-4 py-1.5 rounded-lg text-sm whitespace-nowrap transition ${
               tab === key ? 'bg-accent text-bg font-medium' : 'bg-white/5 text-white/60 hover:text-white'
             }`}
@@ -158,35 +147,25 @@ export default function VpnKeyBlock({ config, title }: { config: string, title?:
         </div>
       )}
 
-      {/* 3. Вкладка: QR-коды (Тестируем все варианты) */}
+      {/* 3. Вкладка: 2 QR-кода рядом */}
       {tab === 'qr' && (
         <div className="flex flex-col items-center py-2 animate-in fade-in">
-          <div className="flex flex-col lg:flex-row gap-6 justify-center w-full overflow-x-auto pb-4">
-            
-            <div className="flex flex-col items-center shrink-0">
-              <span className="text-xs text-white/60 mb-2">vpn:// (AmneziaVPN)</span>
+          <div className="flex flex-col sm:flex-row gap-6 justify-center w-full">
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-white/60 mb-2">Для AmneziaVPN</span>
               <div className="bg-white p-2 rounded-xl">
                 <canvas ref={canvasAmneziaRef} />
               </div>
             </div>
-
-            <div className="flex flex-col items-center shrink-0">
-              <span className="text-xs text-white/60 mb-2">awg:// (AmneziaWG вариант)</span>
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-white/60 mb-2">Для WireGuard</span>
               <div className="bg-white p-2 rounded-xl">
-                <canvas ref={canvasAwgRef} />
+                <canvas ref={canvasWgRef} />
               </div>
             </div>
-
-            <div className="flex flex-col items-center shrink-0">
-              <span className="text-xs text-white/60 mb-2">Сырой текст (WireGuard)</span>
-              <div className="bg-white p-2 rounded-xl">
-                <canvas ref={canvasRawRef} />
-              </div>
-            </div>
-
           </div>
           <p className="text-white/40 text-xs mt-4 text-center">
-            Попробуйте отсканировать каждый из них через ваше приложение VPN.
+            Наведите камеру смартфона прямо из приложения VPN.
           </p>
         </div>
       )}

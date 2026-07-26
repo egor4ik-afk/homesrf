@@ -9,19 +9,17 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Достаем все активные конфиги для этого юзера из vpn_clients
+  // Считаем и выводим ТОЛЬКО те ключи, у которых реально есть текст конфига
   const clientRows = await sql<{ config_text: string }[]>`
     SELECT config_text 
     FROM vpn_clients 
-    WHERE user_id = ${user.id} AND revoked_at IS NULL
+    WHERE user_id = ${user.id} AND config_text IS NOT NULL
   `;
 
-  // Превращаем в массив строк, отфильтровывая возможные null (если есть старые записи)
   const vpnKeys = clientRows
     .map(row => row.config_text)
     .filter(Boolean);
 
-  // Примешиваем массив ключей к объекту юзера
   const userWithKeys = {
     ...user,
     vpn_keys: vpnKeys
