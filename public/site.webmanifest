@@ -1,6 +1,6 @@
 {
   "name": "RelaxNet",
-  "short_name": "RNet",
+  "short_name": "RelaxNet",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -15,7 +15,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#0b0c10",
-  "background_color": "#0b0c10",
+  "theme_color": "#a5f04d",
+  "background_color": "#338d35",
   "display": "standalone"
 }
