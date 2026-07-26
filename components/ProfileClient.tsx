@@ -43,7 +43,6 @@ export default function ProfileClient({
   const [user, setUser] = useState(initialUser);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [error, setError] = useState('');
-  const [unlinking, setUnlinking] = useState(false);
   const [platform, setPlatform] = useState<typeof PLATFORMS[number]>('Windows');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -99,27 +98,12 @@ export default function ProfileClient({
     }
   }
 
-  async function unlinkCard() {
-    setError('');
-    setUnlinking(true);
-    try {
-      const res = await fetch('/api/payment/unlink-card', { method: 'POST' });
-      if (!res.ok) throw new Error('Не удалось отвязать карту');
-      setUser((u) => ({ ...u, card_last4: null, card_type: null }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
-    } finally {
-      setUnlinking(false);
-    }
-  }
-
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
     router.refresh();
   }
 
-  // Реальный вызов API
   async function generateNewKey() {
     if (userKeys.length >= MAX_KEYS) return;
     try {
@@ -128,7 +112,6 @@ export default function ProfileClient({
 
       if (!res.ok) throw new Error(data.error || 'Ошибка выпуска ключа');
 
-      // Добавляем новый ключ в стейт без перезагрузки
       setUser(prev => ({
         ...prev,
         vpn_keys: [...(prev.vpn_keys || (prev.vpn_key ? [prev.vpn_key] : [])), data.config]
@@ -140,12 +123,12 @@ export default function ProfileClient({
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-16">
-      <div className="flex items-center justify-between mb-10">
-        <div>
-          <p className="text-white/40 text-sm">{user.email}</p>
+      <div className="flex items-center justify-between gap-3 mb-10">
+        <div className="min-w-0">
+          <p className="text-white/40 text-sm truncate">{user.email}</p>
           <h1 className="text-2xl font-medium">Профиль</h1>
         </div>
-        <button onClick={logout} className="text-white/40 text-sm hover:text-white/70">
+        <button onClick={logout} className="shrink-0 text-white/40 text-sm hover:text-white/70">
           Выйти
         </button>
       </div>
@@ -185,11 +168,11 @@ export default function ProfileClient({
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
       </section>
 
-      {/* Ключи (до 3 штук) */}
+      {/* Ключи (до 3 штук) — компактный блок над "Скачать клиент" */}
       {isActive && userKeys.length > 0 && (
-        <section className="mb-6">
+        <section className="rounded-xl border border-border bg-card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
+            <h2 className="text-base font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
             {userKeys.length < MAX_KEYS && (
               <button
                 onClick={generateNewKey}
@@ -200,11 +183,11 @@ export default function ProfileClient({
             )}
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-2">
             {userKeys.map((keyConfig, index) => (
               <VpnKeyBlock
                 key={index}
-                config={keyConfig} 
+                config={keyConfig}
                 title={`Ключ устройства ${index + 1}`}
               />
             ))}
@@ -212,7 +195,7 @@ export default function ProfileClient({
         </section>
       )}
 
-      {/* Скачивание клиента + инструкция */}
+      {/* Скачивание клиента + единая инструкция */}
       <section className="rounded-xl border border-border bg-card p-6 mb-6">
         <p className="text-white/60 text-sm mb-3">Скачать клиент и подключиться</p>
 
@@ -227,12 +210,12 @@ export default function ProfileClient({
           </a>
         )}
 
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-3">
           {PLATFORMS.map((p) => (
             <button
               key={p}
               onClick={() => setPlatform(p)}
-              className={`px-3 py-1.5 rounded-md text-xs ${platform === p ? 'bg-accent text-bg' : 'bg-bg text-white/50 border border-border'
+              className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap ${platform === p ? 'bg-accent text-bg' : 'bg-bg text-white/50 border border-border'
                 }`}
             >
               {p}
@@ -242,7 +225,8 @@ export default function ProfileClient({
 
         <ol className="text-white/60 text-sm space-y-1.5 list-decimal list-inside">
           <li>Установите и откройте клиент Amnezia для {platform}.</li>
-          <li>В зависимости от платформы используйте Файл, Ссылку или QR-код из блока выше.</li>
+          <li>Нажмите «Скачать конфиг» у нужного ключа выше.</li>
+          <li>В приложении выберите «Добавить конфигурацию из файла».</li>
           <li>Подключитесь и пользуйтесь свободным интернетом.</li>
         </ol>
       </section>
@@ -265,17 +249,11 @@ export default function ProfileClient({
 
       <div className="mt-auto pt-6 border-t border-white/10 w-full max-w-md mx-auto text-center pb-8">
         <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-6 text-sm text-gray-500">
-          <Link
-            href="/privacy"
-            className="hover:text-gray-300 transition-colors"
-          >
+          <Link href="/privacy" className="hover:text-gray-300 transition-colors">
             Политика конфиденциальности
           </Link>
           <span className="hidden sm:inline text-gray-700">•</span>
-          <Link
-            href="/terms"
-            className="hover:text-gray-300 transition-colors"
-          >
+          <Link href="/terms" className="hover:text-gray-300 transition-colors">
             Пользовательское соглашение
           </Link>
         </div>
