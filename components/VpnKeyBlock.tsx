@@ -11,7 +11,9 @@ export default function VpnKeyBlock({ config, title = 'amnezia' }: VpnKeyBlockPr
   const handleDownloadConfig = () => {
     if (!config) return;
 
-    const blob = new Blob([config], { type: 'text/plain' });
+    // application/octet-stream вместо text/plain — иначе iOS Safari
+    // открывает содержимое как текстовую страницу вместо сохранения файла
+    const blob = new Blob([config], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
