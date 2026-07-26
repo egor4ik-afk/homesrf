@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React from 'react';
 
 interface VpnKeyBlockProps {
   config: string;
@@ -8,29 +8,26 @@ interface VpnKeyBlockProps {
 }
 
 export default function VpnKeyBlock({ config, title = 'amnezia' }: VpnKeyBlockProps) {
-  const formRef = useRef<HTMLFormElement>(null);
-
   const handleDownloadConfig = () => {
     if (!config) return;
-    // Настоящий сабмит формы = нативная HTTP-загрузка с Content-Disposition:
-    // attachment на сервере. Работает и в обычных браузерах, и во встроенных
-    // webview (Telegram, ВК и т.п.), где JS-скачивание через Blob часто заблокировано.
-    formRef.current?.requestSubmit();
-  };
 
-  const safeFileName = title.replace(/\s+/g, '_');
+    const blob = new Blob([config], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    const safeFileName = title.replace(/\s+/g, '_');
+    link.download = `${safeFileName}.conf`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="w-full flex items-center justify-between gap-3 p-4 bg-white/5 rounded-xl border border-white/10">
       <span className="text-sm font-medium text-white truncate">{title}</span>
-
-      {/* Скрытая форма — реальный POST на сервер, ответ приходит с
-          Content-Disposition: attachment, браузер сам скачивает файл */}
-      <form ref={formRef} action="/api/vpn/download" method="POST" target="_self" className="hidden">
-        <input type="hidden" name="config" value={config} />
-        <input type="hidden" name="filename" value={safeFileName} />
-      </form>
-
       <button
         onClick={handleDownloadConfig}
         className="shrink-0 px-4 py-2 bg-accent hover:brightness-110 rounded-lg font-medium text-bg text-sm transition-all"
