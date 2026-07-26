@@ -13,10 +13,9 @@ export default function LandingPage() {
         <br />
         <span className="text-white/60">без лишних настроек</span>
       </h1>
-      <p className="text-white/60 text-lg mb-10 max-w-xl">
-        Один тариф RelaxNet PRO, оплата картой в рублях, ключ приходит на почту
-        сразу после оплаты — вставьте его в приложение и подключайтесь.
-      </p>
+      <p className="text-white/70 text-lg leading-relaxed">
+  Один тариф RelaxNet PRO, удобная оплата картой. До 3 конфигов для 3 разных устройств — файлы конфигурации всегда под рукой в вашем личном кабинете. Скачайте, добавьте в приложение и подключайтесь.
+</p>
 
       <div className="flex gap-4">
         <Link
