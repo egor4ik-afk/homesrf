@@ -14,7 +14,7 @@ export default function TermsPage() {
       <div className="space-y-6 text-white/70 leading-relaxed">
         <section>
           <h2 className="text-white font-medium mb-2">1. Услуга</h2>
-          <p>RelaxNet предоставляет доступ к VPN-серверам по подписке PRO. Оплата — картой через ЮKassa, в рублях.</p>
+          <p>RelaxNet предоставляет доступ к VPN-серверам по подписке PRO. Оплата — через Lava, в рублях.</p>
         </section>
         <section>
           <h2 className="text-white font-medium mb-2">2. Ключ доступа</h2>
@@ -23,6 +23,10 @@ export default function TermsPage() {
         <section>
           <h2 className="text-white font-medium mb-2">3. Возврат средств</h2>
           <p>Условия возврата определяются отдельно и должны соответствовать законодательству РФ о защите прав потребителей.</p>
+        </section>
+        <section>
+          <h2 className="text-white font-medium mb-2">4. Контакты</h2>
+          <p>Telegram: <a href="https://t.me/sup_re" className="text-white hover:underline">@sup_re</a><br/>Email: <a href="mailto:support@webbuild.ge" className="text-white hover:underline">support@webbuild.ge</a></p>
         </section>
       </div>
     </main>

@@ -18,6 +18,7 @@ interface UserData {
   status: string;
   subscription_expires_at: string | null;
   vpn_key: string | null;
+  vpn_keys?: string[]; // Добавлено для поддержки до 3-х ключей
   tarif_id: number | null;
   tarif_name: string | null;
   card_last4: string | null;
@@ -25,6 +26,7 @@ interface UserData {
 }
 
 const PLATFORMS = ['Windows', 'macOS', 'iOS', 'Android', 'Linux'] as const;
+const MAX_KEYS = 3; // Лимит ключей
 
 export default function ProfileClient({
   user: initialUser,
@@ -49,7 +51,11 @@ export default function ProfileClient({
     user.subscription_expires_at &&
     new Date(user.subscription_expires_at) > new Date();
 
-  // после возврата с ?payment=success поллим профиль, пока не обработается вебхук
+  // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
+  const userKeys = user.vpn_keys?.length 
+    ? user.vpn_keys 
+    : (user.vpn_key ? [user.vpn_key] : []);
+
   useEffect(() => {
     if (searchParams.get('payment') !== 'success' || isActive) return;
 
@@ -64,14 +70,13 @@ export default function ProfileClient({
           if (pollRef.current) clearInterval(pollRef.current);
         }
       }
-      if (attempts >= 15 && pollRef.current) clearInterval(pollRef.current); // ~30 сек
+      if (attempts >= 15 && pollRef.current) clearInterval(pollRef.current);
     }, 2000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isActive, searchParams]);
 
   async function pay(tarifId: number) {
     setError('');
@@ -84,8 +89,8 @@ export default function ProfileClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Не удалось создать платёж');
-      if (data.confirmationUrl) {
-        window.location.href = data.confirmationUrl;
+      if (data.confirmationUrl || data.paymentUrl) {
+        window.location.href = data.confirmationUrl || data.paymentUrl;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка');
@@ -111,6 +116,15 @@ export default function ProfileClient({
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
     router.refresh();
+  }
+
+  // Функция-заглушка для выпуска нового ключа
+  async function generateNewKey() {
+    if (userKeys.length >= MAX_KEYS) return;
+    // TODO: Вызов твоего API для генерации нового ключа
+    // const res = await fetch('/api/vpn/generate', { method: 'POST' });
+    // Обновить стейт setUser
+    alert('Тут будет вызов API генерации нового ключа!');
   }
 
   return (
@@ -140,46 +154,55 @@ export default function ProfileClient({
           </p>
         )}
 
-        {!isActive &&
-          tarifs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => pay(t.id)}
-              disabled={payingId === t.id}
-              className="mt-4 w-full py-3 rounded-lg bg-accent text-bg font-medium disabled:opacity-50"
-            >
-              {payingId === t.id
-                ? 'Переходим к оплате…'
-                : `Оплатить ${t.name} — ${t.priceRub.toFixed(0)} ₽ / ${t.durationDays} дн. · до ${t.maxConnections} устройств`}
-            </button>
-          ))}
+        {!isActive && (
+          <div className="mt-4 space-y-4">
+            {tarifs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => pay(t.id)}
+                disabled={payingId === t.id}
+                className="w-full py-3 rounded-lg bg-accent text-bg font-medium disabled:opacity-50"
+              >
+                {payingId === t.id
+                  ? 'Переходим к оплате…'
+                  : `Оплатить ${t.name} — ${t.priceRub.toFixed(0)} ₽ / ${t.durationDays} дн. · до ${t.maxConnections} устройств`}
+              </button>
+            ))}
+            <p className="text-center text-white/40 text-xs mt-2">Безопасная оплата через Lava.top</p>
+          </div>
+        )}
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
       </section>
 
-      {/* Ключ */}
-      {isActive && user.vpn_key && <VpnKeyBlock config={user.vpn_key} />}
-
-      {/* Сохранённая карта */}
-      {/* {user.card_last4 && (
-        <section className="rounded-xl border border-border bg-card p-6 mb-6">
-          <p className="text-white/60 text-sm mb-2">Способ оплаты</p>
-          <div className="flex items-center justify-between">
-            <span className="text-sm">
-              {user.card_type || 'Карта'} •••• {user.card_last4}
-            </span>
-            <button
-              onClick={unlinkCard}
-              disabled={unlinking}
-              className="text-red-400 text-sm hover:text-red-300 disabled:opacity-50"
-            >
-              {unlinking ? 'Отвязываем…' : 'Отвязать карту'}
-            </button>
+      {/* Устройства (Ключи) - Подготовка под 3 ключа */}
+      {isActive && userKeys.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-4 px-1">
+            <h2 className="text-xl font-medium">Устройства ({userKeys.length} / {MAX_KEYS})</h2>
+            {userKeys.length < MAX_KEYS && (
+              <button 
+                onClick={generateNewKey}
+                className="text-sm bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition"
+              >
+                + Выпустить ключ
+              </button>
+            )}
+          </div>
+          
+          <div className="space-y-6">
+            {userKeys.map((keyConfig, index) => (
+              <VpnKeyBlock 
+                key={index} 
+                config={keyConfig} 
+                title={`Устройство ${index + 1}`} 
+              />
+            ))}
           </div>
         </section>
-      )} */}
+      )}
 
       {/* Скачивание клиента + инструкция */}
-      <section className="rounded-xl border border-border bg-card p-6">
+      <section className="rounded-xl border border-border bg-card p-6 mb-6">
         <p className="text-white/60 text-sm mb-3">Скачать клиент и подключиться</p>
 
         {downloadsUrl && (
@@ -209,9 +232,25 @@ export default function ProfileClient({
 
         <ol className="text-white/60 text-sm space-y-1.5 list-decimal list-inside">
           <li>Установите и откройте клиент Amnezia для {platform}.</li>
-          <li>Нажмите «Добавить подключение» → «Вставить ключ».</li>
-          <li>Вставьте ключ из письма или из блока выше и нажмите «Подключиться».</li>
+          <li>В зависимости от платформы используйте Файл, Ссылку или QR-код из блока выше.</li>
+          <li>Подключитесь и пользуйтесь свободным интернетом.</li>
         </ol>
+      </section>
+
+      {/* Контакты / Поддержка */}
+      <section className="rounded-xl border border-border bg-card p-6 text-sm">
+        <h3 className="font-medium mb-2">Остались вопросы?</h3>
+        <p className="text-white/60 mb-2">Служба поддержки всегда на связи:</p>
+        <ul className="space-y-1">
+          <li>
+            <span className="text-white/40 mr-2">Telegram:</span>
+            <a href="https://t.me/sup_re" target="_blank" className="text-accent hover:underline">@sup_re</a>
+          </li>
+          <li>
+            <span className="text-white/40 mr-2">Email:</span>
+            <a href="mailto:support@webbuild.ge" className="text-accent hover:underline">support@webbuild.ge</a>
+          </li>
+        </ul>
       </section>
     </main>
   );
