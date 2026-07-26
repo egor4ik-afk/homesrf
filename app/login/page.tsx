@@ -47,7 +47,7 @@ function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Неверный код');
-      router.replace(from);
+      router.push(from);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка');
