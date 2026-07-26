@@ -17,7 +17,7 @@ export default function VpnKeyBlock({ config, title = 'amnezia' }: VpnKeyBlockPr
     link.href = url;
 
     const safeFileName = title.replace(/\s+/g, '_');
-    link.download = `${safeFileName}.conf`;
+    link.download = `${safeFileName}.txt`;
 
     document.body.appendChild(link);
     link.click();
