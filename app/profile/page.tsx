@@ -16,6 +16,18 @@ export default async function ProfilePage() {
     ORDER BY price_rub DESC
   `;
 
+  // Достаем ВСЕ валидные конфиги из vpn_clients для этого юзера
+  const clientRows = await sql<{ config_text: string }[]>`
+    SELECT config_text 
+    FROM vpn_clients 
+    WHERE user_id = ${user.id} AND config_text IS NOT NULL AND revoked_at IS NULL
+    ORDER BY created_at ASC
+  `;
+
+  const vpnKeys = clientRows
+    .map(row => row.config_text)
+    .filter(Boolean);
+
   const safeUser = {
     id: user.id,
     email: user.email,
@@ -24,6 +36,8 @@ export default async function ProfilePage() {
       ? new Date(user.subscription_expires_at).toISOString()
       : null,
     vpn_key: user.vpn_key,
+    // Вот здесь подмешиваем массив ключей из vpn_clients:
+    vpn_keys: vpnKeys.length > 0 ? vpnKeys : (user.vpn_key ? [user.vpn_key] : []),
     tarif_id: user.tarif_id,
     tarif_name: user.tarif_name,
     card_last4: user.card_last4,
