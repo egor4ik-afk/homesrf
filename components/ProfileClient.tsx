@@ -118,13 +118,23 @@ export default function ProfileClient({
     router.refresh();
   }
 
-  // Функция-заглушка для выпуска нового ключа
+  // Реальный вызов API
   async function generateNewKey() {
     if (userKeys.length >= MAX_KEYS) return;
-    // TODO: Вызов твоего API для генерации нового ключа
-    // const res = await fetch('/api/vpn/generate', { method: 'POST' });
-    // Обновить стейт setUser
-    alert('Тут будет вызов API генерации нового ключа!');
+    try {
+      const res = await fetch('/api/vpn/generate', { method: 'POST' });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || 'Ошибка выпуска ключа');
+      
+      // Добавляем новый ключ в стейт без перезагрузки
+      setUser(prev => ({
+        ...prev,
+        vpn_keys: [...(prev.vpn_keys || (prev.vpn_key ? [prev.vpn_key] : [])), data.config]
+      }));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Не удалось выпустить ключ');
+    }
   }
 
   return (
@@ -174,17 +184,17 @@ export default function ProfileClient({
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
       </section>
 
-      {/* Устройства (Ключи) - Подготовка под 3 ключа */}
+      {/* Ключи (до 3 штук) */}
       {isActive && userKeys.length > 0 && (
         <section className="mb-6">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-xl font-medium">Устройства ({userKeys.length} / {MAX_KEYS})</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
             {userKeys.length < MAX_KEYS && (
               <button 
                 onClick={generateNewKey}
-                className="text-sm bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition"
+                className="text-sm border border-border hover:border-white/40 text-white px-3 py-1.5 rounded-lg transition"
               >
-                + Выпустить ключ
+                + Выпустить ещё
               </button>
             )}
           </div>
@@ -194,7 +204,7 @@ export default function ProfileClient({
               <VpnKeyBlock 
                 key={index} 
                 config={keyConfig} 
-                title={`Устройство ${index + 1}`} 
+                title={`Ключ устройства ${index + 1}`} 
               />
             ))}
           </div>

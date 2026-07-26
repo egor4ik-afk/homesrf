@@ -145,6 +145,7 @@ model VpnClient {
   privateKey   String    @map("private_key")
   presharedKey String    @map("preshared_key")
   allowedIp    String    @map("allowed_ip")
+  configText   String?   @map("config_text") @db.Text // <-- Добавлено поле для хранения конфига
   revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
