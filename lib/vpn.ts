@@ -1,12 +1,7 @@
 import crypto from 'crypto';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import sql from './db';
 import { Client } from 'ssh2';
-
-const execFileAsync = promisify(execFile);
-
-// ... (imports and helper functions remain the same)
+import { AWG2_DEFAULT_I1 } from './vpnLink';
 
 export function generateKeyPair() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('x25519');
@@ -23,6 +18,7 @@ export function generatePsk() {
 function ipToInt(ip: string) {
   return ip.split('.').reduce((a, o) => (a << 8) + Number(o), 0) >>> 0;
 }
+
 function intToIp(n: number) {
   return [24, 16, 8, 0].map((s) => (n >>> s) & 255).join('.');
 }
@@ -54,12 +50,19 @@ function sshExec(host: string, command: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const conn = new Client();
     const chunks: Buffer[] = [];
-    const timer = setTimeout(() => { conn.end(); reject(new Error('ssh timeout')); }, 20_000);
+    const timer = setTimeout(() => {
+      conn.end();
+      reject(new Error('ssh timeout'));
+    }, 20_000);
 
     conn
       .on('ready', () => {
         conn.exec(command, (err, stream) => {
-          if (err) { clearTimeout(timer); conn.end(); return reject(err); }
+          if (err) {
+            clearTimeout(timer);
+            conn.end();
+            return reject(err);
+          }
           stream
             .on('data', (d: Buffer) => chunks.push(d))
             .on('close', (code: number) => {
@@ -71,34 +74,44 @@ function sshExec(host: string, command: string): Promise<string> {
             });
         });
       })
-      .on('error', (e) => { clearTimeout(timer); reject(e); })
+      .on('error', (e) => {
+        clearTimeout(timer);
+        reject(e);
+      })
       .connect({ host, port: 22, username, privateKey, readyTimeout: 10_000 });
   });
 }
 
 const B64_RE = /^[A-Za-z0-9+/]{43}=$/;
 const IP_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
+const AWG_CONTAINER = 'amnezia-awg2';
+const AWG_CONF = '/opt/amnezia/awg/awg0.conf';
 
 async function addPeerOnNode(host: string, pub: string, psk: string, ip: string) {
   if (!B64_RE.test(pub) || !B64_RE.test(psk) || !IP_RE.test(ip)) {
     throw new Error('addPeerOnNode: некорректные параметры');
   }
+
+  // \\n здесь намеренно: в шелл уходит literal \n, который разворачивает printf.
   const cmd = [
-    `printf '%s' '${psk}' | docker exec -i amnezia-awg2 sh -c 'cat > /tmp/psk'`,
-    `docker exec amnezia-awg2 awg set awg0 peer '${pub}' preshared-key /tmp/psk allowed-ips ${ip}/32`,
-    `docker exec amnezia-awg2 rm -f /tmp/psk`,
-    `docker exec amnezia-awg2 sh -c "printf '\n[Peer]\nPublicKey = ${pub}\nPresharedKey = ${psk}\nAllowedIPs = ${ip}/32\n' >> /opt/amnezia/awg/awg0.conf"`,
+    `printf '%s' '${psk}' | docker exec -i ${AWG_CONTAINER} sh -c 'cat > /tmp/psk'`,
+    `docker exec ${AWG_CONTAINER} awg set awg0 peer '${pub}' preshared-key /tmp/psk allowed-ips ${ip}/32`,
+    `docker exec ${AWG_CONTAINER} rm -f /tmp/psk`,
+    `docker exec ${AWG_CONTAINER} sh -c "printf '\\n[Peer]\\nPublicKey = ${pub}\\nPresharedKey = ${psk}\\nAllowedIPs = ${ip}/32\\n' >> ${AWG_CONF}"`,
   ].join(' && ');
+
   await sshExec(host, cmd);
 }
 
 export async function removePeerOnNode(host: string, pub: string) {
   if (!B64_RE.test(pub)) throw new Error('removePeerOnNode: некорректный ключ');
   const escaped = pub.replace(/[+/]/g, '\\$&');
+
   const cmd = [
-    `docker exec amnezia-awg2 awg set awg0 peer '${pub}' remove`,
-    `docker exec amnezian-awg2 sh -c "awk -v RS= -v ORS='\\n\\n' '!/${escaped}/' /opt/amnezia/awg/awg0.conf > /tmp/c && mv /tmp/c /opt/amnezia/awg/awg0.conf"`,
+    `docker exec ${AWG_CONTAINER} awg set awg0 peer '${pub}' remove`,
+    `docker exec ${AWG_CONTAINER} sh -c "awk -v RS= -v ORS='\\n\\n' '!/${escaped}/' ${AWG_CONF} > /tmp/c && mv /tmp/c ${AWG_CONF}"`,
   ].join(' && ');
+
   await sshExec(host, cmd);
 }
 
@@ -107,13 +120,64 @@ interface ServerSettings {
   serverPublicKey: string;
   subnet?: string;
   dns?: string;
+  /** Второй DNS. Если не задан — строка DNS будет из одного адреса. */
+  dns2?: string;
   mtu?: number;
+  /** Junk-пакет AmneziaWG 2.0. Если у сервера своё значение — положите его
+   *  в vpn_server_settings.settings.i1, иначе возьмётся дефолт Amnezia. */
+  i1?: string;
   awg: Record<string, string | number>;
 }
 
-export function buildClientConfig(s: ServerSettings, privateKey: string, psk: string, address: string) {
-  const awgLines = Object.entries(s.awg).map(([k, v]) => `${k} = ${v}`).join('\n');
-  return `[Interface]\nPrivateKey = ${privateKey}\nAddress = ${address}/32\nDNS = ${s.dns ?? '1.1.1.1'}\nMTU = ${s.mtu ?? 1280}\n${awgLines}\n\n[Peer]\nPublicKey = ${s.serverPublicKey}\nPresharedKey = ${psk}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = ${s.endpoint}\nPersistentKeepalive = 25\n`;
+/** Порядок и состав полей — как в конфигах штатного установщика
+ *  AmneziaWG 2.0. Раньше порядок зависел от того, как ключи легли в JSON
+ *  настроек сервера, а I1–I5 не писались совсем. */
+export function buildClientConfig(
+  s: ServerSettings,
+  privateKey: string,
+  psk: string,
+  address: string,
+) {
+  const awg = s.awg ?? {};
+  const p = (key: string, fallback = '') =>
+    awg[key] !== undefined ? String(awg[key]) : fallback;
+
+  const dns = s.dns2 ? `${s.dns ?? '1.1.1.1'}, ${s.dns2}` : (s.dns ?? '1.1.1.1');
+  const i1 = s.i1 ?? AWG2_DEFAULT_I1;
+
+  return [
+    '[Interface]',
+    `Address = ${address}/32`,
+    `DNS = ${dns}`,
+    // В эталонном конфиге строки MTU нет, но без неё клиент берёт 1420
+    // и голосовые в Telegram перестают проходить — оставляем явной.
+    `MTU = ${s.mtu ?? 1280}`,
+    `PrivateKey = ${privateKey}`,
+    `Jc = ${p('Jc')}`,
+    `Jmin = ${p('Jmin')}`,
+    `Jmax = ${p('Jmax')}`,
+    `S1 = ${p('S1')}`,
+    `S2 = ${p('S2')}`,
+    `S3 = ${p('S3')}`,
+    `S4 = ${p('S4')}`,
+    `H1 = ${p('H1')}`,
+    `H2 = ${p('H2')}`,
+    `H3 = ${p('H3')}`,
+    `H4 = ${p('H4')}`,
+    `I1 = ${i1}`,
+    'I2 = ',
+    'I3 = ',
+    'I4 = ',
+    'I5 = ',
+    '',
+    '[Peer]',
+    `PublicKey = ${s.serverPublicKey}`,
+    `PresharedKey = ${psk}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    `Endpoint = ${s.endpoint}`,
+    'PersistentKeepalive = 25',
+    '',
+  ].join('\n');
 }
 
 export async function issueVpnKey(userId: number, tarifId: number): Promise<string> {
@@ -142,9 +206,7 @@ export async function issueVpnKey(userId: number, tarifId: number): Promise<stri
   const subnet = s.subnet || '10.8.1.0/24';
 
   let address = await allocateIp(server.id, subnet);
-
-  // Сразу генерируем текст конфига, все данные для этого уже есть
-  const configText = buildClientConfig(s, privateKey, psk, address);
+  let configText = buildClientConfig(s, privateKey, psk, address);
 
   for (let attempt = 0; ; attempt++) {
     try {
@@ -156,6 +218,9 @@ export async function issueVpnKey(userId: number, tarifId: number): Promise<stri
     } catch (e) {
       if (attempt >= 2) throw e;
       address = await allocateIp(server.id, subnet);
+      // адрес поменялся — конфиг надо пересобрать, иначе в БД ляжет
+      // текст со старым Address
+      configText = buildClientConfig(s, privateKey, psk, address);
     }
   }
 
