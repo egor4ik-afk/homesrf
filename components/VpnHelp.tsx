@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 
-const STEPS: Record<string, string[]> = {
+type Step = string | { text: string; linkLabel: string };
+
+const STEPS: Record<string, Step[]> = {
   'iPhone / iPad': [
     'Установите приложение AmneziaVPN из App Store',
-    'На вкладке «Файл» выберите формат .vpn и нажмите «Скачать» → «Сохранить в Файлы»',
-    'Откройте сохранённый файл в «Файлах» — он запустится в Amnezia и добавит подключение',
-    'Если файл не открылся — нажмите «Скопировать ключ» и в Amnezia выберите «Добавить из буфера обмена»',
+    'Основной способ: в блоке ключа нажмите «Скопировать ключ», откройте Amnezia → «+» → «Добавить из буфера обмена» (или «Вставить») и подключение добавится',
+    'Запасной способ: на вкладке «Файл» выберите формат .vpn, нажмите «Скачать» → «Сохранить в Файлы»',
+    'Откройте сохранённый файл в приложении «Файлы» — он запустится в Amnezia и добавит подключение',
     'Включите тумблер подключения',
   ],
   Android: [
@@ -17,8 +19,8 @@ const STEPS: Record<string, string[]> = {
     'Включите тумблер подключения',
   ],
   'Windows / macOS / Linux': [
-    'Установите клиент AmneziaVPN или AmneziaWG (ссылки на странице загрузок)',
-    'На вкладке «Файл» скачайте конфиг',
+    { text: 'Скачайте клиент AmneziaVPN или AmneziaWG со страницы загрузок:', linkLabel: 'страница загрузок' },
+    'На вкладке «Файл» скачайте конфиг (.conf или .txt)',
     'В приложении: «Добавить» → «Импорт из файла» → выберите скачанный файл',
     'Нажмите «Подключиться»',
   ],
@@ -26,7 +28,7 @@ const STEPS: Record<string, string[]> = {
 
 const STORAGE_KEY = 'relaxnet_help_collapsed';
 
-export default function VpnHelp() {
+export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
   // По умолчанию развёрнута; при первом рендере поднимаем сохранённый выбор.
   const [collapsed, setCollapsed] = useState(false);
   const [platform, setPlatform] = useState<keyof typeof STEPS>('iPhone / iPad');
@@ -82,12 +84,31 @@ export default function VpnHelp() {
             ))}
           </div>
           <ol className="space-y-2">
-            {STEPS[platform].map((step, i) => (
-              <li key={i} className="flex gap-3 text-sm text-white/70">
-                <span className="text-accent font-medium shrink-0">{i + 1}.</span>
-                {step}
-              </li>
-            ))}
+            {STEPS[platform].map((step, i) => {
+              const isLink = typeof step !== 'string';
+              const text = isLink ? step.text : step;
+              return (
+                <li key={i} className="flex gap-3 text-sm text-white/70">
+                  <span className="text-accent font-medium shrink-0">{i + 1}.</span>
+                  <span>
+                    {text}
+                    {isLink && downloadsUrl && (
+                      <>
+                        {' '}
+                        <a
+                          href={downloadsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent underline hover:brightness-110"
+                        >
+                          {step.linkLabel}
+                        </a>
+                      </>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </div>
       )}

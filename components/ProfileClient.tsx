@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import VpnKeyBlock from './VpnKeyBlock';
 import VpnHelp from '@/components/VpnHelp';
 import Link from 'next/link';
+import { DOWNLOADS_URL } from '@/lib/constants';
 
 interface Tarif {
   id: number;
@@ -194,8 +195,7 @@ export default function ProfileClient({
             )}
           </div>
 
-          <VpnHelp />
-
+          <VpnHelp downloadsUrl={DOWNLOADS_URL} />
           <div className="space-y-2">
             {userKeys.map((keyItem, index) => (
               <VpnKeyBlock
