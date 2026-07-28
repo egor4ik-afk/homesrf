@@ -4,27 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { buildAmneziaVpnLink } from '@/lib/vpnLink';
 
-const STEPS: Record<string, string[]> = {
-  'iPhone / iPad': [
-    'Установите приложение AmneziaVPN из App Store',
-    'На вкладке «Ссылка» нажмите «Открыть в Amnezia» — подключение добавится само',
-    'Либо наведите на QR-код Amnezia обычную камеру телефона (не сканер внутри приложения) и нажмите на всплывшую ссылку',
-    'Разрешите добавление VPN-конфигурации и включите тумблер',
-  ],
-  Android: [
-    'Установите AmneziaVPN из Google Play',
-    'На вкладке «Ссылка» нажмите «Открыть в Amnezia» либо скопируйте ссылку и вставьте в приложении',
-    'Либо наведите на QR-код Amnezia камеру телефона и нажмите на всплывшую ссылку',
-    'Включите тумблер подключения',
-  ],
-  'Windows / macOS / Linux': [
-    'Скачайте файл конфига на вкладке «Файл»',
-    'Установите клиент AmneziaVPN или AmneziaWG (ссылки на странице загрузок)',
-    'В приложении: «Добавить» → «Импорт из файла» → выберите скачанный файл',
-    'Нажмите «Подключиться»',
-  ],
-};
-
 interface Props {
   config: string;
   title?: string;
@@ -46,8 +25,7 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   const [tab, setTab] = useState<'link' | 'qr' | 'file' | 'text'>('link');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
-  const [platform, setPlatform] = useState<keyof typeof STEPS>('iPhone / iPad');
-  const [format, setFormat] = useState<'txt' | 'conf'>('txt');
+  const [format, setFormat] = useState<'txt' | 'conf' | 'vpn'>('txt');
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -91,9 +69,12 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   }, [tab, config, amneziaLink]);
 
   function download() {
-    // Data-URL, а не Blob: Blob-скачивание не работает в iOS Safari.
+    // .vpn — родной формат AmneziaVPN: внутри лежит vpn://-ссылка, и iOS
+    //        открывает такой файл именно в Amnezia (а не в WireGuard).
+    // .conf/.txt — формат AmneziaWG / роутеров: внутри текст конфига.
+    const payload = format === 'vpn' ? amneziaLink : config;
     const dataUrl =
-      'data:application/octet-stream;charset=utf-8,' + encodeURIComponent(config);
+      'data:application/octet-stream;charset=utf-8,' + encodeURIComponent(payload);
     const a = document.createElement('a');
     a.href = dataUrl;
     a.download = `relaxnet.${format}`;
@@ -107,20 +88,20 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
     if (amneziaLink) window.location.href = amneziaLink;
   }
 
-  // iOS: системный share sheet — единственный надёжный способ передать
-  // ссылку/файл в приложение. В списке появляется «Скопировать» и, если
-  // Amnezia установлена, действие открытия конфига.
-  async function shareToAmnezia() {
+  // iOS: share sheet с файлом .vpn (родной формат AmneziaVPN). Внутри —
+  // vpn://-ссылка, поэтому система предлагает открыть его в Amnezia, а не
+  // в WireGuard. Если приложение не появится в списке — путь тупиковый и
+  // кнопку можно убрать, но сначала стоит проверить на живом устройстве.
+  async function shareVpnFile() {
     try {
-      // Файлом Amnezia на iOS подхватывается надёжнее, чем vpn://-ссылкой.
-      const file = new File([config], 'relaxnet.conf', {
+      const file = new File([amneziaLink], 'relaxnet.vpn', {
         type: 'application/octet-stream',
       });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: title || 'RelaxNet' });
         return;
       }
-      // Если файлами делиться нельзя — делимся ссылкой vpn://
+      // запасной путь, если файлами делиться нельзя — делимся ссылкой
       await navigator.share({ text: amneziaLink, title: title || 'RelaxNet' });
     } catch {
       /* пользователь закрыл шторку — не ошибка */
@@ -236,22 +217,27 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
             />
           </div>
 
-          {/* iOS: share sheet — самый надёжный путь в приложение.
-              На остальных платформах — прямой переход по ссылке. */}
           {isIOS ? (
-            <div className="flex flex-col sm:flex-row gap-2">
+            // iOS: копирование — главный путь. «Отправить в Amnezia» —
+            // системная шторка с файлом .vpn (открывается в Amnezia).
+            <div className="flex flex-col gap-2">
               <button
-                onClick={shareToAmnezia}
-                className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+                onClick={() => copyToClipboard(amneziaLink, true)}
+                className="w-full py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+              >
+                {copiedLink ? 'Ключ скопирован ✓' : 'Скопировать ключ'}
+              </button>
+              <button
+                onClick={shareVpnFile}
+                className="w-full py-2.5 rounded-lg bg-white/10 text-sm hover:bg-white/15 transition"
               >
                 Отправить в Amnezia
               </button>
-              <button
-                onClick={() => copyToClipboard(amneziaLink, true)}
-                className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
-              >
-                {copiedLink ? 'Скопировано ✓' : 'Скопировать ссылку'}
-              </button>
+              <p className="text-white/40 text-xs mt-1 text-center">
+                «Отправить в Amnezia» → в шторке выберите приложение или «Сохранить
+                в Файлы». Если Amnezia в списке нет — скопируйте ключ и вставьте
+                в приложении.
+              </p>
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row gap-2">
@@ -265,16 +251,10 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
                 onClick={() => copyToClipboard(amneziaLink, true)}
                 className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
               >
-                {copiedLink ? 'Скопировано ✓' : 'Скопировать ссылку'}
+                {copiedLink ? 'Скопировано ✓' : 'Скопировать ключ'}
               </button>
             </div>
           )}
-
-          <p className="text-white/40 text-xs mt-2 text-center">
-            {isIOS
-              ? 'На iPhone нажмите «Отправить в Amnezia» и выберите приложение в списке. Amnezia должна быть установлена.'
-              : 'Самый быстрый способ: на телефоне подключение добавляется в одно касание.'}
-          </p>
         </div>
       )}
 
@@ -297,8 +277,7 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
           </div>
           <p className="text-white/40 text-xs mt-4 text-center">
             Сканируйте QR-код Amnezia обычной камерой телефона со второго устройства и
-            нажмите на всплывшую ссылку — приложение откроется само. Правый QR — для клиентов
-            WireGuard.
+            нажмите на всплывшую ссылку. Правый QR — для клиентов WireGuard.
           </p>
         </div>
       )}
@@ -306,9 +285,9 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
       {/* 3. Файл */}
       {tab === 'file' && (
         <div className="py-2 animate-in fade-in">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className="text-xs text-white/50">Формат:</span>
-            {(['txt', 'conf'] as const).map((f) => (
+            {(['vpn', 'txt', 'conf'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFormat(f)}
@@ -327,9 +306,9 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
             Скачать relaxnet.{format}
           </button>
           <p className="text-white/40 text-xs mt-2 text-center">
-            {format === 'conf'
-              ? 'Файл .conf Amnezia открывает по умолчанию.'
-              : 'Файл .txt проще посмотреть вручную, в Amnezia импортируется так же.'}
+            {format === 'vpn'
+              ? 'Для приложения AmneziaVPN. На iPhone откройте скачанный файл — Amnezia добавит подключение сама.'
+              : 'Для AmneziaWG и роутеров. .txt удобно посмотреть вручную, в приложение импортируется через «Добавить из файла».'}
           </p>
         </div>
       )}
@@ -348,31 +327,6 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
           </button>
         </div>
       )}
-
-      {/* Инструкция по платформам */}
-      <div className="mt-6 border-t border-border pt-4">
-        <div className="flex gap-2 mb-3 flex-wrap">
-          {(Object.keys(STEPS) as (keyof typeof STEPS)[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPlatform(p)}
-              className={`px-3 py-1 rounded-md text-xs transition ${
-                platform === p ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-        <ol className="space-y-2">
-          {STEPS[platform].map((step, i) => (
-            <li key={i} className="flex gap-3 text-sm text-white/70">
-              <span className="text-accent font-medium shrink-0">{i + 1}.</span>
-              {step}
-            </li>
-          ))}
-        </ol>
-      </div>
     </section>
   );
 }
