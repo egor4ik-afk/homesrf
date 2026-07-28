@@ -17,16 +17,22 @@ export default async function ProfilePage() {
   `;
 
   // Достаем ВСЕ валидные конфиги из vpn_clients для этого юзера
-  const clientRows = await sql<{ id: number; config_text: string }[]>`
-    SELECT id, config_text 
-    FROM vpn_clients 
-    WHERE user_id = ${user.id} AND config_text IS NOT NULL AND revoked_at IS NULL
-    ORDER BY created_at ASC
+  const clientRows = await sql<
+    { id: number; config_text: string; assign_country: string | null }[]
+  >`
+    SELECT vc.id, vc.config_text, vs.assign_country
+    FROM vpn_clients vc
+    JOIN vpn_servers vs ON vs.id = vc.vpn_server_id
+    WHERE vc.user_id = ${user.id}
+      AND vc.config_text IS NOT NULL
+      AND vc.revoked_at IS NULL
+    ORDER BY vc.created_at ASC
   `;
 
-  const vpnKeys: { id: number | null; config: string }[] = clientRows
-    .filter(r => r.config_text)
-    .map(r => ({ id: r.id, config: r.config_text }));
+  const vpnKeys: { id: number | null; config: string; country: string | null }[] =
+    clientRows
+      .filter(r => r.config_text)
+      .map(r => ({ id: r.id, config: r.config_text, country: r.assign_country }));
 
   const safeUser = {
     id: user.id,
@@ -37,7 +43,9 @@ export default async function ProfilePage() {
       : null,
     vpn_key: user.vpn_key,
     // Вот здесь подмешиваем массив ключей из vpn_clients:
-    vpn_keys: vpnKeys.length > 0 ? vpnKeys : (user.vpn_key ? [{ id: null, config: user.vpn_key }] : []),
+    vpn_keys: vpnKeys.length > 0
+      ? vpnKeys
+      : (user.vpn_key ? [{ id: null, config: user.vpn_key, country: null }] : []),
     tarif_id: user.tarif_id,
     tarif_name: user.tarif_name,
     card_last4: user.card_last4,

@@ -7,7 +7,7 @@ import { buildAmneziaVpnLink } from '@/lib/vpnLink';
 interface Props {
   config: string;
   title?: string;
-  country?: string | null;   // ← вот этой строки не хватает
+  country?: string | null;
   clientId?: number | null;
   onDelete?: (clientId: number) => void;
 }
@@ -20,7 +20,7 @@ function detectIOS() {
   );
 }
 
-export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props) {
+export default function VpnKeyBlock({ config, title, country, clientId, onDelete }: Props) {
   const [tab, setTab] = useState<'link' | 'qr' | 'file' | 'text'>('link');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
@@ -68,9 +68,6 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   }, [tab, config, amneziaLink]);
 
   function download() {
-    // .vpn — родной формат AmneziaVPN: внутри лежит vpn://-ссылка, и iOS
-    //        открывает такой файл именно в Amnezia (а не в WireGuard).
-    // .conf/.txt — формат AmneziaWG / роутеров: внутри текст конфига.
     const payload = format === 'vpn' ? amneziaLink : config;
     const dataUrl =
       'data:application/octet-stream;charset=utf-8,' + encodeURIComponent(payload);
@@ -87,10 +84,6 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
     if (amneziaLink) window.location.href = amneziaLink;
   }
 
-  // iOS: share sheet с файлом .vpn (родной формат AmneziaVPN). Внутри —
-  // vpn://-ссылка, поэтому система предлагает открыть его в Amnezia, а не
-  // в WireGuard. Если приложение не появится в списке — путь тупиковый и
-  // кнопку можно убрать, но сначала стоит проверить на живом устройстве.
   async function shareVpnFile() {
     try {
       const file = new File([amneziaLink], 'relaxnet.vpn', {
@@ -100,7 +93,6 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
         await navigator.share({ files: [file], title: title || 'RelaxNet' });
         return;
       }
-      // запасной путь, если файлами делиться нельзя — делимся ссылкой
       await navigator.share({ text: amneziaLink, title: title || 'RelaxNet' });
     } catch {
       /* пользователь закрыл шторку — не ошибка */
@@ -145,7 +137,10 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3 mb-1">
-        {title && <h2 className="text-lg font-medium">{title}</h2>}
+        <div>
+          {title && <h2 className="text-lg font-medium">{title}</h2>}
+          {country && <p className="text-sm text-white/50">{country}</p>}
+        </div>
 
         {clientId != null && (
           <div className="shrink-0">
@@ -217,8 +212,6 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
           </div>
 
           {isIOS ? (
-            // iOS: копирование — главный путь. «Отправить в Amnezia» —
-            // системная шторка с файлом .vpn (открывается в Amnezia).
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => copyToClipboard(amneziaLink, true)}
