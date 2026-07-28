@@ -103,7 +103,8 @@ async function handleFirstPayment(event: LavaWebhookEvent) {
   // Выдача ключа ДО пометки succeeded (см. шапку файла)
   let vpnKey: string;
   try {
-    vpnKey = await issueVpnKey(userId, tarif.id as number);
+    const issued = await issueVpnKey(userId, tarif.id as number);
+    vpnKey = issued.configText;
   } catch (e) {
     console.error('issueVpnKey failed, ждём ретрая вебхука:', e);
     return NextResponse.json({ error: 'key issue failed' }, { status: 502 });
