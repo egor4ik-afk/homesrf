@@ -144,7 +144,7 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6">
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3 mb-1">
         {title && <h2 className="text-lg font-medium">{title}</h2>}
 

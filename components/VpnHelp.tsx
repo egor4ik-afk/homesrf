@@ -57,7 +57,7 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
   const showBody = !hydrated ? true : !collapsed;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5 mb-4">
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
       <button
         onClick={toggle}
         className="w-full flex items-center justify-between gap-3 text-left"
