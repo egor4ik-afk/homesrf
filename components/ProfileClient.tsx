@@ -137,6 +137,8 @@ export default function ProfileClient({
     }));
   }
 
+  const paymentPending = searchParams.get('payment') === 'success' && !isActive;
+
   return (
     <main className="max-w-2xl mx-auto px-3 py-6 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between gap-3 mb-10">
@@ -158,14 +160,29 @@ export default function ProfileClient({
               До {new Date(user.subscription_expires_at as string).toLocaleDateString('ru-RU')}
             </p>
           </>
+        ) : paymentPending ? (
+          <div className="rounded-lg bg-accent/10 border border-accent/30 p-3">
+            <p className="text-accent text-sm font-medium">Оплата обрабатывается…</p>
+            <p className="text-white/70 text-sm mt-1">
+              Если вы всё ещё на странице оплаты — нажмите крестик (×) слева сверху,
+              чтобы вернуться в RelaxNet. Ключ появится здесь автоматически.
+            </p>
+          </div>
         ) : (
-          <p className="text-white/60 text-sm">
-            Подписка не активна{searchParams.get('payment') === 'success' ? ' — ждём подтверждения оплаты…' : ''}
-          </p>
+          <p className="text-white/60 text-sm">Подписка не активна</p>
         )}
 
         {!isActive && (
           <div className="mt-4 space-y-4">
+            {/* Подсказка ДО перехода на оплату — чтобы человек не завис на окне Lava */}
+            <div className="rounded-lg bg-accent/10 border border-accent/30 p-3">
+              <p className="text-white/80 text-sm">
+                <span className="text-accent font-medium">Важно:</span> после успешной
+                оплаты на странице Lava нажмите крестик (×) слева сверху, чтобы
+                вернуться в RelaxNet — ключ появится в профиле автоматически.
+              </p>
+            </div>
+
             {tarifs.map((t) => (
               <button
                 key={t.id}
@@ -183,6 +200,14 @@ export default function ProfileClient({
         )}
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
       </section>
+
+      {/* Инструкция подключения — показываем и до оплаты, чтобы человек заранее
+          понимал, как всё устроено. Кнопки в блоках ключей появятся после оплаты. */}
+      {!isActive && (
+        <div className="mb-6">
+          <VpnHelp downloadsUrl={DOWNLOADS_URL} />
+        </div>
+      )}
 
       {/* Ключи (до 3 штук) — компактный блок над "Скачать клиент" */}
       {isActive && (
