@@ -7,9 +7,8 @@ import { buildAmneziaVpnLink } from '@/lib/vpnLink';
 interface Props {
   config: string;
   title?: string;
-  /** id строки vpn_clients — нужен для удаления. */
+  country?: string | null;   // ← вот этой строки не хватает
   clientId?: number | null;
-  /** Колбэк после успешного удаления (родитель убирает ключ из списка). */
   onDelete?: (clientId: number) => void;
 }
 

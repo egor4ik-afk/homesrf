@@ -33,6 +33,10 @@ async function allocateIp(
   const net = ipToInt(base) & (0xffffffff << (32 - bits));
   const size = 2 ** (32 - bits);
 
+  // Уникальность IP теперь обеспечивает ЧАСТИЧНЫЙ индекс
+  // vpn_clients_active_ip_uniq (только WHERE revoked_at IS NULL), поэтому
+  // IP отозванных ключей можно спокойно переиспользовать — считаем
+  // занятыми только активные.
   const rows = await sql<{ allowed_ip: string }[]>`
     SELECT allowed_ip FROM vpn_clients
     WHERE vpn_server_id = ${serverId} AND revoked_at IS NULL

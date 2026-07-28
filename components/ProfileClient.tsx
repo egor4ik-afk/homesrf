@@ -21,7 +21,7 @@ interface UserData {
   status: string;
   subscription_expires_at: string | null;
   vpn_key: string | null;
-  vpn_keys?: { id: number | null; config: string }[];
+  vpn_keys?: { id: number | null; config: string, country: string | null }[];
   tarif_id: number | null;
   tarif_name: string | null;
   card_last4: string | null;
@@ -45,6 +45,7 @@ export default function ProfileClient({
   const [user, setUser] = useState(initialUser);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [generating, setGenerating] = useState(false);
   const [platform, setPlatform] = useState<typeof PLATFORMS[number]>('Windows');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -56,7 +57,7 @@ export default function ProfileClient({
   // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
   const userKeys = user.vpn_keys?.length
     ? user.vpn_keys
-    : (user.vpn_key ? [{ id: null, config: user.vpn_key }] : []);
+    : (user.vpn_key ? [{ id: null, config: user.vpn_key, country: null }] : []);
 
   useEffect(() => {
     if (searchParams.get('payment') !== 'success' || isActive) return;
@@ -107,7 +108,8 @@ export default function ProfileClient({
   }
 
   async function generateNewKey() {
-    if (userKeys.length >= MAX_KEYS) return;
+    if (userKeys.length >= MAX_KEYS || generating) return;
+    setGenerating(true);
     try {
       const res = await fetch('/api/vpn/generate', { method: 'POST' });
       const data = await res.json();
@@ -117,12 +119,14 @@ export default function ProfileClient({
       setUser(prev => ({
         ...prev,
         vpn_keys: [
-          ...(prev.vpn_keys || (prev.vpn_key ? [{ id: null, config: prev.vpn_key }] : [])),
-          { id: data.id ?? null, config: data.config },
+          ...(prev.vpn_keys || (prev.vpn_key ? [{ id: null, config: prev.vpn_key, country: null }] : [])),
+          { id: data.id ?? null, config: data.config, country: data.country ?? null },
         ],
       }));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Не удалось выпустить ключ');
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -181,70 +185,53 @@ export default function ProfileClient({
       </section>
 
       {/* Ключи (до 3 штук) — компактный блок над "Скачать клиент" */}
-      {isActive && userKeys.length > 0 && (
+      {isActive && (
         <section className="rounded-xl border border-border bg-card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
             {userKeys.length < MAX_KEYS && (
               <button
                 onClick={generateNewKey}
-                className="text-sm border border-border hover:border-white/40 text-white px-3 py-1.5 rounded-lg transition"
+                disabled={generating}
+                className="text-sm border border-border hover:border-white/40 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50"
               >
-                + Выпустить ещё
+                {generating ? 'Выпускаем…' : '+ Выпустить ещё'}
               </button>
             )}
           </div>
 
           <VpnHelp downloadsUrl={DOWNLOADS_URL} />
+
           <div className="space-y-2">
-            {userKeys.map((keyItem, index) => (
-              <VpnKeyBlock
-                key={keyItem.id ?? index}
-                config={keyItem.config}
-                clientId={keyItem.id}
-                title={`Ключ устройства ${index + 1}`}
-                onDelete={handleKeyDeleted}
-              />
-            ))}
+            {userKeys.length > 0 ? (
+              userKeys.map((keyItem, index) => (
+                <VpnKeyBlock
+                  key={keyItem.id ?? index}
+                  config={keyItem.config}
+                  clientId={keyItem.id}
+                  country={keyItem.country}
+                  title={`Ключ устройства ${index + 1}`}
+                  onDelete={handleKeyDeleted}
+                />
+              ))
+            ) : (
+              <div className="rounded-xl border border-border bg-card p-6 text-center">
+                <p className="text-white/60 text-sm mb-4">
+                  У вас пока нет ключей. Выпустите первый — он появится здесь и сразу
+                  будет готов к подключению.
+                </p>
+                <button
+                  onClick={generateNewKey}
+                  disabled={generating}
+                  className="px-5 py-2.5 rounded-lg bg-accent text-bg font-medium disabled:opacity-50"
+                >
+                  {generating ? 'Выпускаем…' : 'Выпустить ключ'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}
-
-      {/* Скачивание клиента + единая инструкция */}
-      <section className="rounded-xl border border-border bg-card p-6 mb-6">
-        <p className="text-white/60 text-sm mb-3">Скачать клиент и подключиться</p>
-
-        {downloadsUrl && (
-          <a
-            href={downloadsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block px-5 py-2.5 rounded-lg border border-border hover:border-white/40 text-sm mb-5"
-          >
-            Скачать клиент Amnezia →
-          </a>
-        )}
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p}
-              onClick={() => setPlatform(p)}
-              className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap ${platform === p ? 'bg-accent text-bg' : 'bg-bg text-white/50 border border-border'
-                }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-
-        <ol className="text-white/60 text-sm space-y-1.5 list-decimal list-inside">
-          <li>Установите и откройте клиент Amnezia для {platform}.</li>
-          <li>Нажмите «Скачать конфиг» у нужного ключа выше.</li>
-          <li>В приложении выберите «Добавить конфигурацию из файла».</li>
-          <li>Подключитесь и пользуйтесь свободным интернетом.</li>
-        </ol>
-      </section>
 
       {/* Контакты / Поддержка */}
       <section className="rounded-xl border border-border bg-card p-6 text-sm">
