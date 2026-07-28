@@ -23,7 +23,11 @@ function intToIp(n: number) {
   return [24, 16, 8, 0].map((s) => (n >>> s) & 255).join('.');
 }
 
-async function allocateIp(serverId: number, subnet: string): Promise<string> {
+async function allocateIp(
+  serverId: number,
+  subnet: string,
+  startOffset = 2,
+): Promise<string> {
   const [base, bitsRaw] = subnet.split('/');
   const bits = Number(bitsRaw ?? 24);
   const net = ipToInt(base) & (0xffffffff << (32 - bits));
@@ -35,7 +39,11 @@ async function allocateIp(serverId: number, subnet: string): Promise<string> {
   `;
   const taken = new Set(rows.map((r) => ipToInt(String(r.allowed_ip).split('/')[0])));
 
-  for (let i = 2; i < size - 1; i++) {
+  // Первые startOffset адресов пропускаем — они зарезервированы под
+  // сам сервер и вручную добавленные/служебные пиры, которых нет в
+  // нашей таблице vpn_clients.
+  const start = Math.max(2, startOffset);
+  for (let i = start; i < size - 1; i++) {
     if (!taken.has(net + i)) return intToIp(net + i);
   }
   throw new Error(`Подсеть ${subnet} на сервере ${serverId} исчерпана`);
@@ -119,6 +127,9 @@ interface ServerSettings {
   endpoint: string;
   serverPublicKey: string;
   subnet?: string;
+  /** С какого последнего октета начинать выдачу IP. Первые адреса
+   *  (сам сервер, ручные/служебные пиры) пропускаются. По умолчанию 2. */
+  ipStart?: number;
   dns?: string;
   /** Второй DNS. Если не задан — строка DNS будет из одного адреса. */
   dns2?: string;
@@ -183,11 +194,18 @@ export function buildClientConfig(
 export async function issueVpnKey(
   userId: number,
   tarifId: number,
-): Promise<{ id: number; configText: string }> {
+): Promise<{ id: number; configText: string; country: string | null; serverName: string }> {
   const rows = await sql<
-    { id: number; ip: string; name: string; ssh_host: string | null; settings: ServerSettings | null }[]
+    {
+      id: number;
+      ip: string;
+      name: string;
+      assign_country: string | null;
+      ssh_host: string | null;
+      settings: ServerSettings | null;
+    }[]
   >`
-    SELECT vs.id, vs.ip, vs.name, vs.ssh_host, vss.settings
+    SELECT vs.id, vs.ip, vs.name, vs.assign_country, vs.ssh_host, vss.settings
     FROM tarif_vpn_servers tvs
     JOIN vpn_servers vs ON vs.id = tvs.vpn_server_id
     LEFT JOIN vpn_server_settings vss ON vss.vpn_server_id = vs.id
@@ -207,8 +225,9 @@ export async function issueVpnKey(
   const { publicKey, privateKey } = generateKeyPair();
   const psk = generatePsk();
   const subnet = s.subnet || '10.8.1.0/24';
+  const ipStart = s.ipStart ?? 2;
 
-  let address = await allocateIp(server.id, subnet);
+  let address = await allocateIp(server.id, subnet, ipStart);
   let configText = buildClientConfig(s, privateKey, psk, address);
 
   let clientId = 0;
@@ -223,7 +242,7 @@ export async function issueVpnKey(
       break;
     } catch (e) {
       if (attempt >= 2) throw e;
-      address = await allocateIp(server.id, subnet);
+      address = await allocateIp(server.id, subnet, ipStart);
       // адрес поменялся — конфиг надо пересобрать, иначе в БД ляжет
       // текст со старым Address
       configText = buildClientConfig(s, privateKey, psk, address);
@@ -234,7 +253,12 @@ export async function issueVpnKey(
 
   await sql`UPDATE users SET vpn_server_id = ${server.id} WHERE id = ${userId}`;
 
-  return { id: clientId, configText };
+  return {
+    id: clientId,
+    configText,
+    country: server.assign_country,
+    serverName: server.name,
+  };
 }
 
 export async function revokeUserKeys(userId: number) {
