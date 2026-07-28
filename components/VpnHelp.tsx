@@ -2,25 +2,24 @@
 
 import { useEffect, useState } from 'react';
 
-type Step = string | { text: string; linkLabel: string };
+type Step = string | { text: string; link: true };
 
 const STEPS: Record<string, Step[]> = {
   'iPhone / iPad': [
-    'Установите приложение AmneziaVPN из App Store',
-    'Основной способ: в блоке ключа нажмите «Скопировать ключ», откройте Amnezia → «+» → «Добавить из буфера обмена» (или «Вставить») и подключение добавится',
-    'Запасной способ: на вкладке «Файл» выберите формат .vpn, нажмите «Скачать» → «Сохранить в Файлы»',
-    'Откройте сохранённый файл в приложении «Файлы» — он запустится в Amnezia и добавит подключение',
-    'Включите тумблер подключения',
+    { text: 'Установите приложение AmneziaVPN — ', link: true },
+    'В RelaxNet нажмите «Скопировать», затем в Amnezia → «+» → «Добавить из буфера обмена» и подключение добавится',
+    'Запасной способ: на вкладке «Файл» выберите формат .vpn, «Скачать» → «Сохранить в Файлы», затем откройте файл — он запустится в Amnezia',
+    'Нажмите «Подключиться',
   ],
   Android: [
-    'Установите AmneziaVPN из Google Play',
-    'В блоке ключа нажмите «Открыть в Amnezia» — подключение добавится само',
-    'Либо «Скопировать ключ» и вставьте его в приложении',
-    'Включите тумблер подключения',
+    { text: 'Установите приложение AmneziaVPN — ', link: true },
+    'В RelaxNet нажмите «Открыть в Amnezia» — подключение добавится само',
+    'Либо «Скопировать» и вставьте ключ в приложении',
+    'Нажмите «Подключиться',
   ],
   'Windows / macOS / Linux': [
-    'Скачайте клиент AmneziaVPN кнопкой «Скачать» выше',
-    'На вкладке «Файл» скачайте конфиг (.conf или .txt)',
+    { text: 'Установите приложение AmneziaVPN — ', link: true },
+    'В RelaxNet на вкладке «Файл» скачайте конфиг (.conf или .txt)',
     'В приложении: «Добавить» → «Импорт из файла» → выберите скачанный файл',
     'Нажмите «Подключиться»',
   ],
@@ -58,20 +57,18 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
 
   return (
     <>
-      {/* Скачать приложение — всегда на виду, над инструкцией */}
+      {/* Скачать приложение — компактная строка над инструкцией */}
       {downloadsUrl && (
-        <section className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4 flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="text-base font-medium">Приложение AmneziaVPN</h3>
-            <p className="text-white/50 text-sm mt-0.5">
-              Установите клиент для вашего устройства, затем добавьте ключ ниже.
-            </p>
-          </div>
+        <section className="rounded-xl border border-border bg-card px-4 py-3 mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-white/70 min-w-0">
+            Установите приложение <span className="text-white font-medium">AmneziaVPN</span>,
+            затем добавьте ключ ниже.
+          </p>
           <a
             href={downloadsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 px-4 py-2.5 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+            className="shrink-0 px-4 py-2 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
           >
             Скачать
           </a>
@@ -104,7 +101,7 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
               </button>
             ))}
           </div>
-          <ol className="space-y-2">
+          <ol className="space-y-2 list-none">
             {STEPS[platform].map((step, i) => {
               const isLink = typeof step !== 'string';
               const text = isLink ? step.text : step;
@@ -114,17 +111,14 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
                   <span>
                     {text}
                     {isLink && downloadsUrl && (
-                      <>
-                        {' '}
-                        <a
-                          href={downloadsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-accent underline hover:brightness-110"
-                        >
-                          {step.linkLabel}
-                        </a>
-                      </>
+                      <a
+                        href={downloadsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent underline hover:brightness-110"
+                      >
+                        скачать
+                      </a>
                     )}
                   </span>
                 </li>
