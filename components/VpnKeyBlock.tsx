@@ -8,13 +8,13 @@ const STEPS: Record<string, string[]> = {
   'iPhone / iPad': [
     'Установите приложение AmneziaVPN из App Store',
     'На вкладке «Ссылка» нажмите «Открыть в Amnezia» — подключение добавится само',
-    'Либо «+» → «Создать из QR-кода» и наведите камеру на QR-код Amnezia',
+    'Либо наведите на QR-код Amnezia обычную камеру телефона (не сканер внутри приложения) и нажмите на всплывшую ссылку',
     'Разрешите добавление VPN-конфигурации и включите тумблер',
   ],
   Android: [
     'Установите AmneziaVPN из Google Play',
     'На вкладке «Ссылка» нажмите «Открыть в Amnezia» либо скопируйте ссылку и вставьте в приложении',
-    'Либо «+» → «Сканировать QR-код» и наведите камеру на QR-код Amnezia',
+    'Либо наведите на QR-код Amnezia камеру телефона и нажмите на всплывшую ссылку',
     'Включите тумблер подключения',
   ],
   'Windows / macOS / Linux': [
@@ -25,17 +25,27 @@ const STEPS: Record<string, string[]> = {
   ],
 };
 
-export default function VpnKeyBlock({ config, title }: { config: string; title?: string }) {
+interface Props {
+  config: string;
+  title?: string;
+  /** id строки vpn_clients — нужен для удаления. */
+  clientId?: number | null;
+  /** Колбэк после успешного удаления (родитель убирает ключ из списка). */
+  onDelete?: (clientId: number) => void;
+}
+
+export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props) {
   const [tab, setTab] = useState<'link' | 'qr' | 'file' | 'text'>('link');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [platform, setPlatform] = useState<keyof typeof STEPS>('iPhone / iPad');
   const [format, setFormat] = useState<'txt' | 'conf'>('txt');
+  const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const canvasAmneziaRef = useRef<HTMLCanvasElement>(null);
   const canvasWgRef = useRef<HTMLCanvasElement>(null);
 
-  // Ссылка vpn:// в родном формате Amnezia (контейнер amnezia-awg2)
   const amneziaLink = useMemo(() => {
     if (!config) return '';
     try {
@@ -48,41 +58,53 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
   useEffect(() => {
     if (tab !== 'qr') return;
 
-    // Ссылка длинная (~1300 символов), поэтому уровень коррекции L и
-    // размер побольше — иначе модули мельчают и камера их не берёт.
     if (canvasAmneziaRef.current && amneziaLink) {
-      QRCode.toCanvas(canvasAmneziaRef.current, amneziaLink, {
-        width: 300,
-        margin: 1,
-        errorCorrectionLevel: 'L',
-        color: { dark: '#000000', light: '#ffffff' },
-      });
+      QRCode.toCanvas(
+        canvasAmneziaRef.current,
+        amneziaLink,
+        { width: 320, margin: 2, errorCorrectionLevel: 'L' },
+        (err) => err && console.error('QR Amnezia:', err),
+      );
     }
 
     if (canvasWgRef.current) {
-      QRCode.toCanvas(canvasWgRef.current, config, {
-        width: 240,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: { dark: '#000000', light: '#ffffff' },
-      });
+      QRCode.toCanvas(
+        canvasWgRef.current,
+        config,
+        { width: 260, margin: 2, errorCorrectionLevel: 'M' },
+        (err) => err && console.error('QR WG:', err),
+      );
     }
   }, [tab, config, amneziaLink]);
 
-  function downloadConf() {
-    const blob = new Blob([config], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+  function download() {
+    // Data-URL, а не Blob: Blob-скачивание не работает в iOS Safari.
+    const dataUrl =
+      'data:application/octet-stream;charset=utf-8,' + encodeURIComponent(config);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = dataUrl;
     a.download = `relaxnet.${format}`;
+    a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+  }
+
+  function openInAmnezia() {
+    if (amneziaLink) window.location.href = amneziaLink;
   }
 
   async function copyToClipboard(text: string, isLink: boolean) {
-    await navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
     if (isLink) {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -92,14 +114,61 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
     }
   }
 
+  async function handleDelete() {
+    if (!clientId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/vpn/${clientId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Не удалось удалить ключ');
+      onDelete?.(clientId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Не удалось удалить ключ');
+      setDeleting(false);
+      setConfirming(false);
+    }
+  }
+
   return (
     <section className="rounded-xl border border-border bg-card p-6">
-      {title && <h2 className="text-lg font-medium mb-1">{title}</h2>}
+      <div className="flex items-start justify-between gap-3 mb-1">
+        {title && <h2 className="text-lg font-medium">{title}</h2>}
+
+        {clientId != null && (
+          <div className="shrink-0">
+            {confirming ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-xs px-2 py-1 rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 disabled:opacity-50 transition"
+                >
+                  {deleting ? 'Удаляем…' : 'Точно удалить'}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  disabled={deleting}
+                  className="text-xs text-white/40 hover:text-white/70"
+                >
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirming(true)}
+                className="text-xs text-white/30 hover:text-red-300 transition"
+              >
+                Удалить
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       <p className="text-white/50 text-sm mb-4">
         Выберите удобный способ добавления конфига в приложение.
       </p>
 
-      {/* Навигация 4 вкладки */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {(
           [
@@ -121,7 +190,7 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
         ))}
       </div>
 
-      {/* 1. Вкладка: Ссылка vpn:// */}
+      {/* 1. Ссылка */}
       {tab === 'link' && (
         <div className="py-2 animate-in fade-in">
           <div className="flex gap-2 items-center bg-black/40 rounded-lg p-2 mb-2 border border-white/10">
@@ -134,12 +203,12 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <a
-              href={amneziaLink || undefined}
-              className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium text-center transition hover:brightness-110"
+            <button
+              onClick={openInAmnezia}
+              className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
             >
               Открыть в Amnezia
-            </a>
+            </button>
             <button
               onClick={() => copyToClipboard(amneziaLink, true)}
               className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
@@ -153,7 +222,7 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
         </div>
       )}
 
-      {/* 2. Вкладка: 2 QR-кода рядом */}
+      {/* 2. QR */}
       {tab === 'qr' && (
         <div className="flex flex-col items-center py-2 animate-in fade-in">
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center w-full">
@@ -171,12 +240,14 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
             </div>
           </div>
           <p className="text-white/40 text-xs mt-4 text-center">
-            Наведите камеру смартфона прямо из приложения VPN.
+            Сканируйте QR-код Amnezia обычной камерой телефона со второго устройства и
+            нажмите на всплывшую ссылку — приложение откроется само. Правый QR — для клиентов
+            WireGuard.
           </p>
         </div>
       )}
 
-      {/* 3. Вкладка: Файл */}
+      {/* 3. Файл */}
       {tab === 'file' && (
         <div className="py-2 animate-in fade-in">
           <div className="flex items-center gap-2 mb-3">
@@ -194,7 +265,7 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
             ))}
           </div>
           <button
-            onClick={downloadConf}
+            onClick={download}
             className="w-full py-3 rounded-lg bg-accent text-bg font-medium"
           >
             Скачать relaxnet.{format}
@@ -207,7 +278,7 @@ export default function VpnKeyBlock({ config, title }: { config: string; title?:
         </div>
       )}
 
-      {/* 4. Вкладка: Текст конфига */}
+      {/* 4. Конфиг */}
       {tab === 'text' && (
         <div className="py-2 animate-in fade-in">
           <pre className="bg-black/40 rounded-lg p-3 text-xs text-white/70 overflow-x-auto max-h-48 whitespace-pre-wrap break-all border border-white/10">

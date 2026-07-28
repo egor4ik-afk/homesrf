@@ -19,7 +19,7 @@ interface UserData {
   status: string;
   subscription_expires_at: string | null;
   vpn_key: string | null;
-  vpn_keys?: string[]; // Добавлено для поддержки до 3-х ключей
+  vpn_keys?: { id: number | null; config: string }[];
   tarif_id: number | null;
   tarif_name: string | null;
   card_last4: string | null;
@@ -54,7 +54,7 @@ export default function ProfileClient({
   // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
   const userKeys = user.vpn_keys?.length
     ? user.vpn_keys
-    : (user.vpn_key ? [user.vpn_key] : []);
+    : (user.vpn_key ? [{ id: null, config: user.vpn_key }] : []);
 
   useEffect(() => {
     if (searchParams.get('payment') !== 'success' || isActive) return;
@@ -114,11 +114,21 @@ export default function ProfileClient({
 
       setUser(prev => ({
         ...prev,
-        vpn_keys: [...(prev.vpn_keys || (prev.vpn_key ? [prev.vpn_key] : [])), data.config]
+        vpn_keys: [
+          ...(prev.vpn_keys || (prev.vpn_key ? [{ id: null, config: prev.vpn_key }] : [])),
+          { id: data.id ?? null, config: data.config },
+        ],
       }));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Не удалось выпустить ключ');
     }
+  }
+
+  function handleKeyDeleted(clientId: number) {
+    setUser(prev => ({
+      ...prev,
+      vpn_keys: (prev.vpn_keys || []).filter(k => k.id !== clientId),
+    }));
   }
 
   return (
@@ -184,11 +194,13 @@ export default function ProfileClient({
           </div>
 
           <div className="space-y-2">
-            {userKeys.map((keyConfig, index) => (
+            {userKeys.map((keyItem, index) => (
               <VpnKeyBlock
-                key={index}
-                config={keyConfig}
+                key={keyItem.id ?? index}
+                config={keyItem.config}
+                clientId={keyItem.id}
                 title={`Ключ устройства ${index + 1}`}
+                onDelete={handleKeyDeleted}
               />
             ))}
           </div>

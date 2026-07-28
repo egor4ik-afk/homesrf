@@ -180,7 +180,10 @@ export function buildClientConfig(
   ].join('\n');
 }
 
-export async function issueVpnKey(userId: number, tarifId: number): Promise<string> {
+export async function issueVpnKey(
+  userId: number,
+  tarifId: number,
+): Promise<{ id: number; configText: string }> {
   const rows = await sql<
     { id: number; ip: string; name: string; ssh_host: string | null; settings: ServerSettings | null }[]
   >`
@@ -208,12 +211,15 @@ export async function issueVpnKey(userId: number, tarifId: number): Promise<stri
   let address = await allocateIp(server.id, subnet);
   let configText = buildClientConfig(s, privateKey, psk, address);
 
+  let clientId = 0;
   for (let attempt = 0; ; attempt++) {
     try {
-      await sql`
+      const inserted = await sql<{ id: number }[]>`
         INSERT INTO vpn_clients (user_id, vpn_server_id, public_key, private_key, preshared_key, allowed_ip, config_text)
         VALUES (${userId}, ${server.id}, ${publicKey}, ${privateKey}, ${psk}, ${address}, ${configText})
+        RETURNING id
       `;
+      clientId = inserted[0].id;
       break;
     } catch (e) {
       if (attempt >= 2) throw e;
@@ -228,7 +234,7 @@ export async function issueVpnKey(userId: number, tarifId: number): Promise<stri
 
   await sql`UPDATE users SET vpn_server_id = ${server.id} WHERE id = ${userId}`;
 
-  return configText;
+  return { id: clientId, configText };
 }
 
 export async function revokeUserKeys(userId: number) {

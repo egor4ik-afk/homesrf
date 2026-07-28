@@ -10,20 +10,20 @@ export async function GET() {
   }
 
   // Достаем ВСЕ валидные конфиги для юзера, сортируем по дате создания
-  const clientRows = await sql<{ config_text: string }[]>`
-    SELECT config_text 
+  const clientRows = await sql<{ id: number; config_text: string }[]>`
+    SELECT id, config_text 
     FROM vpn_clients 
     WHERE user_id = ${user.id} AND config_text IS NOT NULL AND revoked_at IS NULL
     ORDER BY created_at ASC
   `;
 
-  const vpnKeys = clientRows
-    .map(row => row.config_text)
-    .filter(Boolean);
+  const vpnKeys: { id: number | null; config: string }[] = clientRows
+    .filter(r => r.config_text)
+    .map(r => ({ id: r.id, config: r.config_text }));
 
   // Страховка для самого первого ключа, если его еще нет в vpn_clients с текстом
   if (vpnKeys.length === 0 && user.vpn_key) {
-    vpnKeys.push(user.vpn_key);
+    vpnKeys.push({ id: null, config: user.vpn_key });
   }
 
   const userWithKeys = {
