@@ -34,6 +34,14 @@ interface Props {
   onDelete?: (clientId: number) => void;
 }
 
+function detectIOS() {
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
 export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props) {
   const [tab, setTab] = useState<'link' | 'qr' | 'file' | 'text'>('link');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -42,9 +50,14 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
   const [format, setFormat] = useState<'txt' | 'conf'>('txt');
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   const canvasAmneziaRef = useRef<HTMLCanvasElement>(null);
   const canvasWgRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    setIsIOS(detectIOS());
+  }, []);
 
   const amneziaLink = useMemo(() => {
     if (!config) return '';
@@ -92,6 +105,26 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
 
   function openInAmnezia() {
     if (amneziaLink) window.location.href = amneziaLink;
+  }
+
+  // iOS: системный share sheet — единственный надёжный способ передать
+  // ссылку/файл в приложение. В списке появляется «Скопировать» и, если
+  // Amnezia установлена, действие открытия конфига.
+  async function shareToAmnezia() {
+    try {
+      // Файлом Amnezia на iOS подхватывается надёжнее, чем vpn://-ссылкой.
+      const file = new File([config], 'relaxnet.conf', {
+        type: 'application/octet-stream',
+      });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: title || 'RelaxNet' });
+        return;
+      }
+      // Если файлами делиться нельзя — делимся ссылкой vpn://
+      await navigator.share({ text: amneziaLink, title: title || 'RelaxNet' });
+    } catch {
+      /* пользователь закрыл шторку — не ошибка */
+    }
   }
 
   async function copyToClipboard(text: string, isLink: boolean) {
@@ -202,22 +235,45 @@ export default function VpnKeyBlock({ config, title, clientId, onDelete }: Props
               className="bg-transparent w-full text-sm text-white/70 outline-none truncate"
             />
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={openInAmnezia}
-              className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
-            >
-              Открыть в Amnezia
-            </button>
-            <button
-              onClick={() => copyToClipboard(amneziaLink, true)}
-              className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
-            >
-              {copiedLink ? 'Скопировано ✓' : 'Скопировать ссылку'}
-            </button>
-          </div>
+
+          {/* iOS: share sheet — самый надёжный путь в приложение.
+              На остальных платформах — прямой переход по ссылке. */}
+          {isIOS ? (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={shareToAmnezia}
+                className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+              >
+                Отправить в Amnezia
+              </button>
+              <button
+                onClick={() => copyToClipboard(amneziaLink, true)}
+                className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
+              >
+                {copiedLink ? 'Скопировано ✓' : 'Скопировать ссылку'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={openInAmnezia}
+                className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+              >
+                Открыть в Amnezia
+              </button>
+              <button
+                onClick={() => copyToClipboard(amneziaLink, true)}
+                className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
+              >
+                {copiedLink ? 'Скопировано ✓' : 'Скопировать ссылку'}
+              </button>
+            </div>
+          )}
+
           <p className="text-white/40 text-xs mt-2 text-center">
-            Самый быстрый способ: на телефоне подключение добавляется в одно касание.
+            {isIOS
+              ? 'На iPhone нажмите «Отправить в Amnezia» и выберите приложение в списке. Amnezia должна быть установлена.'
+              : 'Самый быстрый способ: на телефоне подключение добавляется в одно касание.'}
           </p>
         </div>
       )}
