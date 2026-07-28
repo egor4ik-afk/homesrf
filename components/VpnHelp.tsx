@@ -19,7 +19,7 @@ const STEPS: Record<string, Step[]> = {
     'Включите тумблер подключения',
   ],
   'Windows / macOS / Linux': [
-    { text: 'Скачайте клиент AmneziaVPN или AmneziaWG со страницы загрузок:', linkLabel: 'страница загрузок' },
+    'Скачайте клиент AmneziaVPN кнопкой «Скачать» выше',
     'На вкладке «Файл» скачайте конфиг (.conf или .txt)',
     'В приложении: «Добавить» → «Импорт из файла» → выберите скачанный файл',
     'Нажмите «Подключиться»',
@@ -57,6 +57,27 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
   const showBody = !hydrated ? true : !collapsed;
 
   return (
+    <>
+      {/* Скачать приложение — всегда на виду, над инструкцией */}
+      {downloadsUrl && (
+        <section className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-base font-medium">Приложение AmneziaVPN</h3>
+            <p className="text-white/50 text-sm mt-0.5">
+              Установите клиент для вашего устройства, затем добавьте ключ ниже.
+            </p>
+          </div>
+          <a
+            href={downloadsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 px-4 py-2.5 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
+          >
+            Скачать
+          </a>
+        </section>
+      )}
+
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
       <button
         onClick={toggle}
@@ -113,5 +134,6 @@ export default function VpnHelp({ downloadsUrl }: { downloadsUrl?: string }) {
         </div>
       )}
     </section>
+    </>
   );
 }
