@@ -4,31 +4,37 @@ import sql from '@/lib/db';
 
 export async function GET() {
   const user = await getCurrentUser();
-  
+
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // Достаем ВСЕ валидные конфиги для юзера, сортируем по дате создания
-  const clientRows = await sql<{ id: number; config_text: string }[]>`
-    SELECT id, config_text 
-    FROM vpn_clients 
-    WHERE user_id = ${user.id} AND config_text IS NOT NULL AND revoked_at IS NULL
-    ORDER BY created_at ASC
+  const clientRows = await sql<
+    { id: number; config_text: string; assign_country: string | null }[]
+  >`
+    SELECT vc.id, vc.config_text, vs.assign_country
+    FROM vpn_clients vc
+    JOIN vpn_servers vs ON vs.id = vc.vpn_server_id
+    WHERE vc.user_id = ${user.id}
+      AND vc.config_text IS NOT NULL
+      AND vc.revoked_at IS NULL
+    ORDER BY vc.created_at ASC
   `;
 
-  const vpnKeys: { id: number | null; config: string }[] = clientRows
-    .filter(r => r.config_text)
-    .map(r => ({ id: r.id, config: r.config_text }));
+  const vpnKeys: { id: number | null; config: string; country: string | null }[] =
+    clientRows
+      .filter((r) => r.config_text)
+      .map((r) => ({ id: r.id, config: r.config_text, country: r.assign_country }));
 
   // Страховка для самого первого ключа, если его еще нет в vpn_clients с текстом
   if (vpnKeys.length === 0 && user.vpn_key) {
-    vpnKeys.push({ id: null, config: user.vpn_key });
+    vpnKeys.push({ id: null, config: user.vpn_key, country: null });
   }
 
   const userWithKeys = {
     ...user,
-    vpn_keys: vpnKeys
+    vpn_keys: vpnKeys,
   };
 
   return NextResponse.json({ user: userWithKeys });
