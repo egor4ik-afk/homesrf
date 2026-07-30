@@ -34,9 +34,8 @@ export default function LandingPage() {
 
       {/* Единственный H1 на странице */}
       <h1 className="text-4xl sm:text-5xl font-medium leading-tight mb-6">
-        VPN, который держит звонок
-        <br />
-        <span className="text-white/60">и не роняет ChatGPT</span>
+      Один VPN на звонки, , и AI<br />
+        <span className="text-white/60">и он не отваливается</span>
       </h1>
 
       <p className="text-white/70 text-lg leading-relaxed mb-10">

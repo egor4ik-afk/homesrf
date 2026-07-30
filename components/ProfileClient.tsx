@@ -47,6 +47,7 @@ export default function ProfileClient({
   const [payingId, setPayingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(false);
   const [platform, setPlatform] = useState<typeof PLATFORMS[number]>('Windows');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -62,6 +63,8 @@ export default function ProfileClient({
     user.status === 'trial' &&
     !!user.trial_expires_at &&
     new Date(user.trial_expires_at) > new Date();
+
+  const trialUsed = !!user.trial_expires_at; // тест уже брали (даже истёкший)
 
   // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
   const userKeys = user.vpn_keys?.length
@@ -107,6 +110,20 @@ export default function ProfileClient({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка');
       setPayingId(null);
+    }
+  }
+
+  async function startTrialNow() {
+    setError('');
+    setTrialLoading(true);
+    try {
+      const res = await fetch('/api/trial/start', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Не удалось выдать тест');
+      router.refresh(); // перечитает серверные данные → покажется ключ и таймер
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка');
+      setTrialLoading(false);
     }
   }
 
@@ -195,6 +212,16 @@ export default function ProfileClient({
 
         {!isActive && (
           <div className="mt-4 space-y-4">
+            {!isTrial && !trialUsed && (
+              <button
+                onClick={startTrialNow}
+                disabled={trialLoading}
+                className="w-full py-3 rounded-lg border border-accent text-accent font-medium disabled:opacity-50"
+              >
+                {trialLoading ? 'Выдаём тест…' : 'Попробовать бесплатно — 1 час'}
+              </button>
+            )}
+
             {/* Подсказка ДО перехода на оплату — чтобы человек не завис на окне Lava */}
             <div className="rounded-lg bg-accent/10 border border-accent/30 p-3">
               <p className="text-white/80 text-sm">
