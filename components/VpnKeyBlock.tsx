@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { buildAmneziaVpnLink } from '@/lib/vpnLink';
+import { useTranslations } from 'next-intl';
 
 interface Props {
   config: string;
@@ -21,6 +22,7 @@ function detectIOS() {
 }
 
 export default function VpnKeyBlock({ config, title, country, clientId, onDelete }: Props) {
+  const t = useTranslations('vpnKey');
   const [tab, setTab] = useState<'link' | 'qr' | 'file' | 'text'>('link');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
@@ -125,10 +127,10 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
     try {
       const res = await fetch(`/api/vpn/${clientId}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Не удалось удалить ключ');
+      if (!res.ok) throw new Error(data.error || t('delete_error'));
       onDelete?.(clientId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Не удалось удалить ключ');
+      alert(err instanceof Error ? err.message : t('delete_error'));
       setDeleting(false);
       setConfirming(false);
     }
@@ -151,14 +153,14 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
                   disabled={deleting}
                   className="text-xs px-2 py-1 rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 disabled:opacity-50 transition"
                 >
-                  {deleting ? 'Удаляем…' : 'Точно удалить'}
+                  {deleting ? t('deleting') : t('delete_confirm')}
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
                   disabled={deleting}
                   className="text-xs text-white/40 hover:text-white/70"
                 >
-                  Отмена
+                  {t('cancel')}
                 </button>
               </div>
             ) : (
@@ -166,24 +168,22 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
                 onClick={() => setConfirming(true)}
                 className="text-xs text-white/30 hover:text-red-300 transition"
               >
-                Удалить
+                {t('delete')}
               </button>
             )}
           </div>
         )}
       </div>
 
-      <p className="text-white/50 text-sm mb-4">
-        Выберите удобный способ добавления конфига в приложение.
-      </p>
+      <p className="text-white/50 text-sm mb-4">{t('helper')}</p>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {(
           [
-            ['link', '1. Ссылка vpn://'],
-            ['qr', '2. QR-коды'],
-            ['file', '3. Файл'],
-            ['text', '4. Конфиг'],
+            ['link', t('tab_link')],
+            ['qr', t('tab_qr')],
+            ['file', t('tab_file')],
+            ['text', t('tab_text')],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -198,7 +198,6 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
         ))}
       </div>
 
-      {/* 1. Ссылка */}
       {tab === 'link' && (
         <div className="py-2 animate-in fade-in">
           <div className="flex gap-2 items-center bg-black/40 rounded-lg p-2 mb-2 border border-white/10">
@@ -217,19 +216,15 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
                 onClick={() => copyToClipboard(amneziaLink, true)}
                 className="w-full py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
               >
-                {copiedLink ? 'Ключ скопирован ✓' : 'Скопировать ключ'}
+                {copiedLink ? t('key_copied') : t('copy_key')}
               </button>
               <button
                 onClick={shareVpnFile}
                 className="w-full py-2.5 rounded-lg bg-white/10 text-sm hover:bg-white/15 transition"
               >
-                Отправить в Amnezia
+                {t('share_amnezia')}
               </button>
-              <p className="text-white/40 text-xs mt-1 text-center">
-                «Отправить в Amnezia» → в шторке выберите приложение или «Сохранить
-                в Файлы». Если Amnezia в списке нет — скопируйте ключ и вставьте
-                в приложении.
-              </p>
+              <p className="text-white/40 text-xs mt-1 text-center">{t('share_hint')}</p>
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row gap-2">
@@ -237,20 +232,19 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
                 onClick={openInAmnezia}
                 className="flex-1 py-3 rounded-lg bg-accent text-bg text-sm font-medium transition hover:brightness-110"
               >
-                Открыть в Amnezia
+                {t('open_amnezia')}
               </button>
               <button
                 onClick={() => copyToClipboard(amneziaLink, true)}
                 className="flex-1 py-3 rounded-lg bg-white/10 text-sm hover:bg-white/15 font-medium transition"
               >
-                {copiedLink ? 'Скопировано ✓' : 'Скопировать ключ'}
+                {copiedLink ? t('copied') : t('copy_key')}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 2. QR */}
       {tab === 'qr' && (
         <div className="flex flex-col items-center py-2 animate-in fade-in">
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center w-full">
@@ -274,7 +268,6 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
         </div>
       )}
 
-      {/* 3. Файл */}
       {tab === 'file' && (
         <div className="py-2 animate-in fade-in">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -305,7 +298,6 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
         </div>
       )}
 
-      {/* 4. Конфиг */}
       {tab === 'text' && (
         <div className="py-2 animate-in fade-in">
           <pre className="bg-black/40 rounded-lg p-3 text-xs text-white/70 overflow-x-auto max-h-48 whitespace-pre-wrap break-all border border-white/10">
@@ -315,7 +307,7 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
             onClick={() => copyToClipboard(config, false)}
             className="mt-2 w-full py-2.5 rounded-lg bg-white/10 text-sm hover:bg-white/15 transition"
           >
-            {copiedText ? 'Текст скопирован ✓' : 'Скопировать текст'}
+            {copiedText ? t('text_copied') : t('copy_text')}
           </button>
         </div>
       )}

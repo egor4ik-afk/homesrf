@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import VpnKeyBlock from './VpnKeyBlock';
 import VpnHelp from '@/components/VpnHelp';
 import { Link } from '@/i18n/navigation';
@@ -22,15 +23,14 @@ interface UserData {
   subscription_expires_at: string | null;
   trial_expires_at?: string | null;
   vpn_key: string | null;
-  vpn_keys?: { id: number | null; config: string, country: string | null }[];
+  vpn_keys?: { id: number | null; config: string; country: string | null }[];
   tarif_id: number | null;
   tarif_name: string | null;
   card_last4: string | null;
   card_type: string | null;
 }
 
-const PLATFORMS = ['Windows', 'macOS', 'iOS', 'Android', 'Linux'] as const;
-const MAX_KEYS = 3; // Лимит ключей
+const MAX_KEYS = 3;
 
 export default function ProfileClient({
   user: initialUser,
@@ -43,12 +43,13 @@ export default function ProfileClient({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('profile');
+  const locale = useLocale();
   const [user, setUser] = useState(initialUser);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [generating, setGenerating] = useState(false);
   const [trialLoading, setTrialLoading] = useState(false);
-  const [platform, setPlatform] = useState<typeof PLATFORMS[number]>('Windows');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isActive =
@@ -56,20 +57,18 @@ export default function ProfileClient({
     user.subscription_expires_at &&
     new Date(user.subscription_expires_at) > new Date();
 
-  // Триал активен, пока не вышел час. status выставляет /api/trial/start,
-  // гасит cron (expireTrials). Ключи триальщику показываем так же, как
-  // платному, — но с таймером и без кнопки «выпустить ещё».
   const isTrial =
     user.status === 'trial' &&
     !!user.trial_expires_at &&
     new Date(user.trial_expires_at) > new Date();
 
-  const trialUsed = !!user.trial_expires_at; // тест уже брали (даже истёкший)
+  const trialUsed = !!user.trial_expires_at;
 
-  // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
   const userKeys = user.vpn_keys?.length
     ? user.vpn_keys
-    : (user.vpn_key ? [{ id: null, config: user.vpn_key, country: null }] : []);
+    : user.vpn_key
+      ? [{ id: null, config: user.vpn_key, country: null }]
+      : [];
 
   useEffect(() => {
     if (searchParams.get('payment') !== 'success' || isActive) return;
@@ -103,12 +102,12 @@ export default function ProfileClient({
         body: JSON.stringify({ tarifId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Не удалось создать платёж');
+      if (!res.ok) throw new Error(data.error || t('error_payment'));
       if (data.confirmationUrl || data.paymentUrl) {
         window.location.href = data.confirmationUrl || data.paymentUrl;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('error_generic'));
       setPayingId(null);
     }
   }
@@ -119,10 +118,8 @@ export default function ProfileClient({
     try {
       const res = await fetch('/api/trial/start', { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Не удалось выдать тест');
+      if (!res.ok) throw new Error(data.error || t('error_trial'));
 
-      // Кладём статус, срок и ключ прямо в стейт — ключ появится сразу,
-      // без перезагрузки страницы.
       setUser((prev) => ({
         ...prev,
         status: 'trial',
@@ -130,14 +127,11 @@ export default function ProfileClient({
         vpn_keys: [{ id: null, config: data.config, country: null }],
       }));
 
-      // Плавно проскроллить к блоку ключа.
       setTimeout(() => {
-        document
-          .getElementById('vpn-keys')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('vpn-keys')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('error_generic'));
     } finally {
       setTrialLoading(false);
     }
@@ -155,10 +149,9 @@ export default function ProfileClient({
     try {
       const res = await fetch('/api/vpn/generate', { method: 'POST' });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t('error_generic'));
 
-      if (!res.ok) throw new Error(data.error || 'Ошибка выпуска ключа');
-
-      setUser(prev => ({
+      setUser((prev) => ({
         ...prev,
         vpn_keys: [
           ...(prev.vpn_keys || (prev.vpn_key ? [{ id: null, config: prev.vpn_key, country: null }] : [])),
@@ -166,65 +159,65 @@ export default function ProfileClient({
         ],
       }));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Не удалось выпустить ключ');
+      alert(err instanceof Error ? err.message : t('error_generic'));
     } finally {
       setGenerating(false);
     }
   }
 
   function handleKeyDeleted(clientId: number) {
-    setUser(prev => ({
+    setUser((prev) => ({
       ...prev,
-      vpn_keys: (prev.vpn_keys || []).filter(k => k.id !== clientId),
+      vpn_keys: (prev.vpn_keys || []).filter((k) => k.id !== clientId),
     }));
   }
 
   const paymentPending = searchParams.get('payment') === 'success' && !isActive;
+  const dateLocale = locale === 'ru' ? 'ru-RU' : 'en-US';
 
   return (
     <main className="max-w-2xl mx-auto px-3 py-6 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between gap-3 mb-10">
         <div className="min-w-0">
           <p className="text-white/40 text-sm truncate">{user.email}</p>
-          <h1 className="text-2xl font-medium">Профиль</h1>
+          <h1 className="text-2xl font-medium">{t('h1')}</h1>
         </div>
         <button onClick={logout} className="shrink-0 text-white/40 text-sm hover:text-white/70">
-          Выйти
+          {t('logout')}
         </button>
       </div>
 
-      {/* Статус подписки */}
       <section className="rounded-xl border border-border bg-card p-6 mb-6">
         {isActive ? (
           <>
-            <p className="text-accent text-sm mb-1">Тариф {user.tarif_name} активен</p>
+            <p className="text-accent text-sm mb-1">
+              {t('plan_active', { name: user.tarif_name ?? '' })}
+            </p>
             <p className="text-white/50 text-sm">
-              До {new Date(user.subscription_expires_at as string).toLocaleDateString('ru-RU')}
+              {t('valid_until', {
+                date: new Date(user.subscription_expires_at as string).toLocaleDateString(dateLocale),
+              })}
             </p>
           </>
         ) : paymentPending ? (
           <div className="rounded-lg bg-accent/10 border border-accent/30 p-3">
-            <p className="text-accent text-sm font-medium">Оплата обрабатывается…</p>
-            <p className="text-white/70 text-sm mt-1">
-              Если вы всё ещё на странице оплаты — нажмите крестик (×) слева сверху,
-              чтобы вернуться в RelaxNet. Ключ появится здесь автоматически.
-            </p>
+            <p className="text-accent text-sm font-medium">{t('payment_processing')}</p>
+            <p className="text-white/70 text-sm mt-1">{t('payment_processing_hint')}</p>
           </div>
         ) : isTrial ? (
           <>
-            <p className="text-accent text-sm mb-1">Идёт бесплатный тест</p>
+            <p className="text-accent text-sm mb-1">{t('trial_active')}</p>
             <p className="text-white/50 text-sm">
-              Доступ до{' '}
-              {new Date(user.trial_expires_at as string).toLocaleTimeString('ru-RU', {
-                hour: '2-digit',
-                minute: '2-digit',
+              {t('trial_until', {
+                time: new Date(user.trial_expires_at as string).toLocaleTimeString(dateLocale, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
               })}
-              . Оплатите, пока идёт тест, — этот же ключ продолжит работать,
-              перевыпускать не нужно.
             </p>
           </>
         ) : (
-          <p className="text-white/60 text-sm">Подписка не активна</p>
+          <p className="text-white/60 text-sm">{t('no_subscription')}</p>
         )}
 
         {!isActive && (
@@ -235,51 +228,51 @@ export default function ProfileClient({
                 disabled={trialLoading}
                 className="w-full py-3 rounded-lg border border-accent text-accent font-medium disabled:opacity-50"
               >
-                {trialLoading ? 'Выдаём тест…' : 'Попробовать бесплатно — 1 час'}
+                {trialLoading ? t('trial_issuing') : t('trial_cta')}
               </button>
             )}
 
-            {/* Подсказка ДО перехода на оплату — чтобы человек не завис на окне Lava */}
             <div className="rounded-lg bg-accent/10 border border-accent/30 p-3">
               <p className="text-white/80 text-sm">
-                <span className="text-accent font-medium">Важно:</span> после успешной
-                оплаты на странице Lava нажмите крестик (×) слева сверху, чтобы
-                вернуться в RelaxNet — ключ появится в профиле автоматически.
+                <span className="text-accent font-medium">{t('lava_notice_label')}</span>{' '}
+                {t('lava_notice_body')}
               </p>
             </div>
 
-            {tarifs.map((t) => (
+            {tarifs.map((tarif) => (
               <button
-                key={t.id}
-                onClick={() => pay(t.id)}
-                disabled={payingId === t.id}
+                key={tarif.id}
+                onClick={() => pay(tarif.id)}
+                disabled={payingId === tarif.id}
                 className="w-full py-3 rounded-lg bg-accent text-bg font-medium disabled:opacity-50"
               >
-                {payingId === t.id
-                  ? 'Переходим к оплате…'
-                  : `Оплатить ${t.name} — ${t.priceRub.toFixed(0)} ₽ / ${t.durationDays} дн. · до ${t.maxConnections} устройств`}
+                {payingId === tarif.id
+                  ? t('pay_processing')
+                  : t('pay_button', {
+                      name: tarif.name,
+                      price: tarif.priceRub.toFixed(0),
+                      days: tarif.durationDays,
+                      devices: tarif.maxConnections,
+                    })}
               </button>
             ))}
-            <p className="text-center text-white/40 text-xs mt-2">Безопасная оплата через Lava.top</p>
+            <p className="text-center text-white/40 text-xs mt-2">{t('lava_secure')}</p>
           </div>
         )}
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
       </section>
 
-      {/* Инструкция подключения — показываем и до оплаты, чтобы человек заранее
-          понимал, как всё устроено. Кнопки в блоках ключей появятся после оплаты. */}
       {!isActive && !isTrial && (
         <div className="mb-6">
           <VpnHelp downloadsUrl={DOWNLOADS_URL} />
         </div>
       )}
 
-      {/* Ключи. При триале — показываем, но без кнопки «выпустить ещё». */}
       {(isActive || isTrial) && (
         <section id="vpn-keys" className="rounded-xl border border-border bg-card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-medium">
-              {isTrial ? 'Тестовый ключ' : `Ваши ключи (${userKeys.length} / ${MAX_KEYS})`}
+              {isTrial ? t('keys_title_trial') : t('keys_title', { count: userKeys.length, max: MAX_KEYS })}
             </h2>
             {isActive && userKeys.length < MAX_KEYS && (
               <button
@@ -287,7 +280,7 @@ export default function ProfileClient({
                 disabled={generating}
                 className="text-sm border border-border hover:border-white/40 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50"
               >
-                {generating ? 'Выпускаем…' : '+ Выпустить ещё'}
+                {generating ? t('issuing') : t('issue_more')}
               </button>
             )}
           </div>
@@ -302,22 +295,19 @@ export default function ProfileClient({
                   config={keyItem.config}
                   clientId={keyItem.id}
                   country={keyItem.country}
-                  title={`Ключ устройства ${index + 1}`}
+                  title={t('key_title', { n: index + 1 })}
                   onDelete={handleKeyDeleted}
                 />
               ))
             ) : (
               <div className="rounded-xl border border-border bg-card p-6 text-center">
-                <p className="text-white/60 text-sm mb-4">
-                  У вас пока нет ключей. Выпустите первый — он появится здесь и сразу
-                  будет готов к подключению.
-                </p>
+                <p className="text-white/60 text-sm mb-4">{t('no_keys_body')}</p>
                 <button
                   onClick={generateNewKey}
                   disabled={generating}
                   className="px-5 py-2.5 rounded-lg bg-accent text-bg font-medium disabled:opacity-50"
                 >
-                  {generating ? 'Выпускаем…' : 'Выпустить ключ'}
+                  {generating ? t('issuing') : t('issue_first')}
                 </button>
               </div>
             )}
@@ -325,18 +315,21 @@ export default function ProfileClient({
         </section>
       )}
 
-      {/* Контакты / Поддержка */}
       <section className="rounded-xl border border-border bg-card p-6 text-sm">
-        <h3 className="font-medium mb-2">Остались вопросы?</h3>
-        <p className="text-white/60 mb-2">Служба поддержки всегда на связи:</p>
+        <h3 className="font-medium mb-2">{t('support_title')}</h3>
+        <p className="text-white/60 mb-2">{t('support_body')}</p>
         <ul className="space-y-1">
           <li>
             <span className="text-white/40 mr-2">Telegram:</span>
-            <a href="https://t.me/sup_re" target="_blank" className="text-accent hover:underline">@sup_re</a>
+            <a href="https://t.me/sup_re" target="_blank" className="text-accent hover:underline">
+              @sup_re
+            </a>
           </li>
           <li>
             <span className="text-white/40 mr-2">Email:</span>
-            <a href="mailto:support@webbuild.ge" className="text-accent hover:underline">support@webbuild.ge</a>
+            <a href="mailto:support@webbuild.ge" className="text-accent hover:underline">
+              support@webbuild.ge
+            </a>
           </li>
         </ul>
       </section>

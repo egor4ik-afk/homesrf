@@ -1,24 +1,11 @@
-import type { Metadata } from 'next';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 
-export const metadata: Metadata = {
-  alternates: { canonical: 'https://relaxnet.pro' },
-};
-
 export default function LandingPage() {
   const t = useTranslations('home');
-  const nav = useTranslations('nav');
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-20">
-      <div className="flex items-center gap-2 mb-16">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-bg font-bold">
-          R
-        </div>
-        <span className="font-medium">{nav('brand')}</span>
-      </div>
-
       <h1 className="text-4xl sm:text-5xl font-medium leading-tight mb-6">
         {t('h1_line1')}
         <br />
