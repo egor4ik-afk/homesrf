@@ -1,57 +1,49 @@
-// app/sitemap.ts  →  СОЗДАТЬ
-// Next.js сам отдаст его по /sitemap.xml. Только канонические,
-// индексируемые страницы. /login и /profile сюда НЕ включаем — они под
-// noindex (личный кабинет). privacy/terms — черновики, priority низкий.
-//
-// Когда добавишь локали (app/[locale]/...), в каждый элемент можно
-// доложить alternates.languages с hreflang — заготовка внизу в комментарии.
-
 import type { MetadataRoute } from 'next';
+import { locales, hreflangMap, defaultLocale } from '@/i18n/config';
 
 const BASE = 'https://relaxnet.pro';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
-  return [
-    {
-      url: BASE,
-      lastModified,
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    {
-      url: `${BASE}/vpn-dlya-zvonkov`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${BASE}/privacy`,
-      lastModified,
-      changeFrequency: 'yearly',
-      priority: 0.2,
-    },
-    {
-      url: `${BASE}/terms`,
-      lastModified,
-      changeFrequency: 'yearly',
-      priority: 0.2,
-    },
+  const pages = [
+    { path: '/', changeFrequency: 'weekly' as const, priority: 1 },
+    { path: '/vpn-dlya-zvonkov', changeFrequency: 'monthly' as const, priority: 0.9 },
+    { path: '/privacy', changeFrequency: 'yearly' as const, priority: 0.2 },
+    { path: '/terms', changeFrequency: 'yearly' as const, priority: 0.2 },
   ];
 
-  // ── Когда появятся локали, каждый пункт станет таким: ──────────────
-  // {
-  //   url: `${BASE}/en`,
-  //   lastModified,
-  //   alternates: {
-  //     languages: {
-  //       ru: `${BASE}/`,
-  //       en: `${BASE}/en`,
-  //       es: `${BASE}/es`,
-  //       zh: `${BASE}/zh`,
-  //       ar: `${BASE}/ar`,
-  //     },
-  //   },
-  // },
+  return pages.flatMap((page) => {
+    const isRoot = page.path === '/';
+    const pagePath = isRoot ? '' : page.path;
+
+    return locales.map((locale) => {
+      const localePath = locale === defaultLocale ? '' : `/${locale}`;
+      let url = `${BASE}${localePath}${pagePath}`;
+      if (isRoot && locale === defaultLocale) {
+        url = `${BASE}/`;
+      }
+
+      const languages: Record<string, string> = {};
+      locales.forEach((l) => {
+        const langLocalePath = l === defaultLocale ? '' : `/${l}`;
+        let langUrl = `${BASE}${langLocalePath}${pagePath}`;
+        if (isRoot && l === defaultLocale) {
+            langUrl = `${BASE}/`;
+        }
+        languages[hreflangMap[l]] = langUrl;
+      });
+      languages['x-default'] = isRoot ? `${BASE}/` : `${BASE}${pagePath}`;
+
+      return {
+        url,
+        lastModified,
+        changeFrequency: page.changeFrequency,
+        priority: page.priority,
+        alternates: {
+          languages,
+        },
+      };
+    });
+  });
 }

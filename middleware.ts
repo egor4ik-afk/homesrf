@@ -1,25 +1,41 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+// middleware.ts  →  ЗАМЕНИТЬ ЦЕЛИКОМ
+import createMiddleware from 'next-intl/middleware';
+import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/constants';
-
+import { locales, defaultLocale } from '@/i18n/config';
+ 
+const intlMiddleware = createMiddleware({
+  locales,
+  defaultLocale,
+  // ru без префикса (/), остальные с префиксом (/en, /es...).
+  // 'as-needed' — дефолтная локаль в URL не мусорит.
+  localePrefix: 'as-needed',
+});
+ 
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const isLoginPage = request.nextUrl.pathname === '/login';
-  const isProfilePage = request.nextUrl.pathname.startsWith('/profile');
-
-  // 1. Если юзер УЖЕ авторизован и заходит на /login -> кидаем в профиль
-  if (token && isLoginPage) {
+ 
+  // Пути без локали-префикса для проверки auth: /en/profile → /profile
+  const stripLocale = pathname.replace(
+    new RegExp(`^/(${locales.join('|')})(?=/|$)`),
+    '',
+  );
+  const isLogin = stripLocale === '/login' || stripLocale === '';
+  const isProfile = stripLocale.startsWith('/profile');
+ 
+  if (token && stripLocale === '/login') {
     return NextResponse.redirect(new URL('/profile', request.url));
   }
-
-  // 2. Если юзер НЕ авторизован и лезет в /profile -> кидаем на логин
-  if (!token && isProfilePage) {
+  if (!token && isProfile) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  return NextResponse.next();
+ 
+  // Всё остальное отдаём i18n-мидлвари (она разложит локаль/редиректы).
+  return intlMiddleware(request);
 }
-
+ 
 export const config = {
-  matcher: ['/profile/:path*', '/login'],
+  // Ловим всё, кроме статики и API. API локализовать не нужно.
+  matcher: ['/((?!api|_next|.*\\..*).*)'],
 };

@@ -66,7 +66,7 @@ const jsonLd = {
       brand: { '@type': 'Brand', name: 'RelaxNet' },
       offers: {
         '@type': 'Offer',
-        price: '150',
+        price: '199',
         priceCurrency: 'RUB',
         availability: 'https://schema.org/InStock',
         url: URL,
