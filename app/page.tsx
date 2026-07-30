@@ -17,11 +17,25 @@ export default function LandingPage() {
   Один тариф RelaxNet PRO, удобная оплата картой. До 3 конфигов для 3 разных устройств — файлы конфигурации всегда под рукой в вашем личном кабинете. Скачайте, добавьте в приложение и подключайтесь.
 </p>
 
+      <div className="mt-4 mb-10 flex items-center gap-3 text-sm text-white/50">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" /> 1 час бесплатно
+        </span>
+        <span className="text-white/20">→</span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/30" /> проверьте скорость
+        </span>
+        <span className="text-white/20">→</span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/30" /> оформите PRO, если понравилось
+        </span>
+      </div>
+
       <div className="flex gap-4">
-        <Link
-          href="/login"
-          className="px-6 py-3 rounded-lg bg-accent text-bg font-medium hover:opacity-90 transition"
-        >
+        <Link href="/login?trial=1" className="px-6 py-3 rounded-lg bg-accent text-bg font-medium hover:opacity-90 transition">
+          Попробовать бесплатно
+        </Link>
+        <Link href="/login" className="px-6 py-3 rounded-lg border border-border text-white/80 hover:border-white/40 transition">
           Войти и оформить PRO
         </Link>
       </div>
