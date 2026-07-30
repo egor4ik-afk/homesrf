@@ -1,32 +1,45 @@
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 
 export default function TermsPage() {
+  const t = useTranslations('terms');
+  const nav = useTranslations('nav');
+
   return (
     <main className="max-w-2xl mx-auto px-6 py-16">
-      <Link href="/" className="text-white/40 text-sm hover:text-white/70">← На главную</Link>
+      <Link href="/" className="text-white/40 text-sm hover:text-white/70">
+        {nav('back_home')}
+      </Link>
 
-      <h1 className="text-2xl font-medium mt-6 mb-2">Условия использования</h1>
-      <p className="text-white/40 text-sm mb-8">
-        Черновик — перед публикацией нужно согласовать с юристом (использование VPN
-        законно не во всех юрисдикциях, стоит явно прописать зону ответственности).
-      </p>
+      <h1 className="text-2xl font-medium mt-6 mb-2">{t('h1')}</h1>
+      <p className="text-white/40 text-sm mb-8">{t('draft_note')}</p>
 
       <div className="space-y-6 text-white/70 leading-relaxed">
         <section>
-          <h2 className="text-white font-medium mb-2">1. Услуга</h2>
-          <p>RelaxNet предоставляет доступ к VPN-серверам по подписке PRO. Оплата — через Lava, в рублях.</p>
+          <h2 className="text-white font-medium mb-2">{t('s1_title')}</h2>
+          <p>{t('s1_body')}</p>
         </section>
         <section>
-          <h2 className="text-white font-medium mb-2">2. Ключ доступа</h2>
-          <p>Ключ выдаётся после успешной оплаты и высылается на email, указанный при входе. Передача ключа третьим лицам не допускается.</p>
+          <h2 className="text-white font-medium mb-2">{t('s2_title')}</h2>
+          <p>{t('s2_body')}</p>
         </section>
         <section>
-          <h2 className="text-white font-medium mb-2">3. Возврат средств</h2>
-          <p>Условия возврата определяются отдельно и должны соответствовать законодательству РФ о защите прав потребителей.</p>
+          <h2 className="text-white font-medium mb-2">{t('s3_title')}</h2>
+          <p>{t('s3_body')}</p>
         </section>
         <section>
-          <h2 className="text-white font-medium mb-2">4. Контакты</h2>
-          <p>Telegram: <a href="https://t.me/sup_re" className="text-white hover:underline">@sup_re</a><br/>Email: <a href="mailto:support@webbuild.ge" className="text-white hover:underline">support@webbuild.ge</a></p>
+          <h2 className="text-white font-medium mb-2">{t('s4_title')}</h2>
+          <p>
+            Telegram:{' '}
+            <a href="https://t.me/sup_re" className="text-white hover:underline">
+              @sup_re
+            </a>
+            <br />
+            Email:{' '}
+            <a href="mailto:support@webbuild.ge" className="text-white hover:underline">
+              support@webbuild.ge
+            </a>
+          </p>
         </section>
       </div>
     </main>
