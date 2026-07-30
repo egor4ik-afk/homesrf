@@ -3,7 +3,11 @@
     "home_title": "RelaxNet — VPN для звонков и доступа к нейросетям",
     "home_desc": "VPN 100–200 Мбит/с: звонки в Telegram и WhatsApp, доступ к ChatGPT, Gemini и Claude. Час на проверку до оплаты.",
     "vpn_title": "VPN для звонков в Telegram и доступа к ChatGPT",
-    "vpn_desc": "Звонки в Telegram и WhatsApp без обрывов, скорость 100–200 Мбит/с, доступ к ChatGPT, Gemini, Claude и Google AI Studio. Час на проверку до оплаты, оплата в рублях."
+    "vpn_desc": "Звонки в Telegram и WhatsApp без обрывов, скорость 100–200 Мбит/с, доступ к ChatGPT, Gemini, Claude и Google AI Studio. Час на проверку до оплаты, оплата в рублях.",
+    "login_title": "Вход в RelaxNet",
+    "login_desc": "Войдите по коду с почты — пароль не нужен.",
+    "profile_title": "Профиль",
+    "profile_desc": "Личный кабинет RelaxNet."
   },
   "nav": {
     "brand": "RelaxNet",
@@ -84,5 +88,16 @@
     "s3_title": "3. Возврат средств",
     "s3_body": "Условия возврата определяются отдельно и должны соответствовать законодательству РФ о защите прав потребителей.",
     "s4_title": "4. Контакты"
+  },
+  "login": {
+    "h1": "Вход в RelaxNet",
+    "step_email_desc": "Введите email — пришлём код для входа",
+    "step_code_desc": "Код отправлен на {email}",
+    "get_code": "Получить код",
+    "sending": "Отправляем…",
+    "submit": "Войти",
+    "verifying": "Проверяем…",
+    "change_email": "Изменить email",
+    "error_fallback": "Ошибка"
   }
 }

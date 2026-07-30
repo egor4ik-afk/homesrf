@@ -3,7 +3,11 @@
     "home_title": "RelaxNet — VPN for calls and AI access",
     "home_desc": "100–200 Mbps VPN: Telegram and WhatsApp calls, access to ChatGPT, Gemini and Claude. One free hour to test before you pay.",
     "vpn_title": "VPN for Telegram calls and ChatGPT access",
-    "vpn_desc": "Uninterrupted Telegram and WhatsApp calls, 100–200 Mbps speed, access to ChatGPT, Gemini, Claude and Google AI Studio. One free hour to test before you pay."
+    "vpn_desc": "Uninterrupted Telegram and WhatsApp calls, 100–200 Mbps speed, access to ChatGPT, Gemini, Claude and Google AI Studio. One free hour to test before you pay.",
+    "login_title": "Sign in to RelaxNet",
+    "login_desc": "Sign in with a code sent to your email — no password needed.",
+    "profile_title": "Profile",
+    "profile_desc": "Your RelaxNet dashboard."
   },
   "nav": {
     "brand": "RelaxNet",
@@ -84,5 +88,16 @@
     "s3_title": "3. Refunds",
     "s3_body": "Refund terms are defined separately and must comply with Russian consumer protection law.",
     "s4_title": "4. Contact"
+  },
+  "login": {
+    "h1": "Sign in to RelaxNet",
+    "step_email_desc": "Enter your email — we'll send a code",
+    "step_code_desc": "Code sent to {email}",
+    "get_code": "Get code",
+    "sending": "Sending…",
+    "submit": "Sign in",
+    "verifying": "Verifying…",
+    "change_email": "Change email",
+    "error_fallback": "Error"
   }
 }

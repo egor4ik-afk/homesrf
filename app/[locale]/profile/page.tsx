@@ -1,13 +1,24 @@
-// app/profile/page.tsx  →  ЗАМЕНИТЬ ЦЕЛИКОМ
-// Изменение против твоей версии: тянем trial_expires_at из users и кладём
-// в safeUser, чтобы клиент показал таймер теста. Всё остальное как было.
-
+// app/[locale]/profile/page.tsx
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import sql from '@/lib/db';
 import { DOWNLOADS_URL } from '@/lib/constants';
 import ProfileClient from '@/components/ProfileClient';
+
+type Props = { params: Promise<{ locale: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'meta' });
+  return {
+    title: t('profile_title'),
+    description: t('profile_desc'),
+    robots: { index: false, follow: true },
+  };
+}
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();

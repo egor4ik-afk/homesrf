@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import VpnKeyBlock from './VpnKeyBlock';
 import VpnHelp from '@/components/VpnHelp';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { DOWNLOADS_URL } from '@/lib/constants';
 
 interface Tarif {
