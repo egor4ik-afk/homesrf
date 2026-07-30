@@ -26,10 +26,10 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={dir}>
       <body className="bg-bg text-white min-h-screen antialiased">
-        <div className="max-w-3xl mx-auto px-6 pt-4 flex justify-end">
-          <LocaleSwitcher />
-        </div>
         <NextIntlClientProvider messages={messages}>
+          <div className="max-w-3xl mx-auto px-6 pt-4 flex justify-end">
+            <LocaleSwitcher />
+          </div>
           {children}
         </NextIntlClientProvider>
       </body>
