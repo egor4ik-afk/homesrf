@@ -14,7 +14,7 @@ const LOCALES_DATA: Record<Locale, { name: string; flag: string }> = {
   ar: { name: 'العربية', flag: '🇸🇦' }
 };
 
-const TEST_LOCALES: Locale[] = ['ru', 'en'];
+const TEST_LOCALES: Locale[] = ['ru', 'en', 'es', 'zh', 'ar'];
 
 export default function LocaleSwitcher() {
   const pathname = usePathname();
@@ -50,7 +50,7 @@ export default function LocaleSwitcher() {
             className="fixed inset-0 z-10" 
             onClick={() => setIsOpen(false)} 
           />
-          <div className="absolute right-0 z-20 mt-2 w-36 origin-top-right rounded-lg bg-[#1a1a1a] border border-white/10 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden">
+          <div className="absolute end-0 z-20 mt-2 w-36 origin-top rounded-lg bg-[#1a1a1a] border border-white/10 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden">
             <div className="py-1">
               {TEST_LOCALES.map((loc) => {
                 const data = LOCALES_DATA[loc];

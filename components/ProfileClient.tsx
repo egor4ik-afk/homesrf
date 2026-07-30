@@ -173,13 +173,20 @@ export default function ProfileClient({
   }
 
   const paymentPending = searchParams.get('payment') === 'success' && !isActive;
-  const dateLocale = locale === 'ru' ? 'ru-RU' : 'en-US';
+  const DATE_LOCALES: Record<string, string> = {
+    ru: 'ru-RU',
+    en: 'en-US',
+    es: 'es-ES',
+    zh: 'zh-CN',
+    ar: 'ar-SA-u-nu-latn',
+  };
+  const dateLocale = DATE_LOCALES[locale] ?? 'en-US';
 
   return (
     <main className="max-w-2xl mx-auto px-3 py-6 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between gap-3 mb-10">
         <div className="min-w-0">
-          <p className="text-white/40 text-sm truncate">{user.email}</p>
+          <p className="text-white/40 text-sm truncate" dir="ltr">{user.email}</p>
           <h1 className="text-2xl font-medium">{t('h1')}</h1>
         </div>
         <button onClick={logout} className="shrink-0 text-white/40 text-sm hover:text-white/70">
@@ -320,13 +327,13 @@ export default function ProfileClient({
         <p className="text-white/60 mb-2">{t('support_body')}</p>
         <ul className="space-y-1">
           <li>
-            <span className="text-white/40 mr-2">Telegram:</span>
+            <span className="text-white/40 me-2">Telegram:</span>
             <a href="https://t.me/sup_re" target="_blank" className="text-accent hover:underline">
               @sup_re
             </a>
           </li>
           <li>
-            <span className="text-white/40 mr-2">Email:</span>
+            <span className="text-white/40 me-2">Email:</span>
             <a href="mailto:support@webbuild.ge" className="text-accent hover:underline">
               support@webbuild.ge
             </a>

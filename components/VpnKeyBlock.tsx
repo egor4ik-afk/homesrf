@@ -204,6 +204,7 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
             <input
               type="text"
               readOnly
+              dir="ltr"
               value={amneziaLink}
               onFocus={(e) => e.currentTarget.select()}
               className="bg-transparent w-full text-sm text-white/70 outline-none truncate"
@@ -300,7 +301,10 @@ export default function VpnKeyBlock({ config, title, country, clientId, onDelete
 
       {tab === 'text' && (
         <div className="py-2 animate-in fade-in">
-          <pre className="bg-black/40 rounded-lg p-3 text-xs text-white/70 overflow-x-auto max-h-48 whitespace-pre-wrap break-all border border-white/10">
+          <pre
+            dir="ltr"
+            className="bg-black/40 rounded-lg p-3 text-xs text-white/70 overflow-x-auto max-h-48 whitespace-pre-wrap break-all border border-white/10"
+          >
             {config}
           </pre>
           <button

@@ -86,6 +86,7 @@ function LoginFormInner() {
               type="email"
               required
               autoFocus
+              dir="ltr"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -111,6 +112,7 @@ function LoginFormInner() {
               required
               autoFocus
               maxLength={6}
+              dir="ltr"
               placeholder="000000"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
