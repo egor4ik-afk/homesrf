@@ -1,0 +1,69 @@
+# RelaxNet
+
+> RelaxNet is a VPN service focused on uninterrupted voice/video calls in
+> Telegram and WhatsApp, and stable access to AI tools in regions where
+> they are restricted.
+
+## What this is
+
+RelaxNet is a commercial VPN subscription service (PRO plan, paid, card
+payment via Lava) built for two specific use cases where generic VPNs
+often fail:
+
+1. Uninterrupted voice/video calls inside Telegram and WhatsApp in regions
+   where these are throttled or blocked.
+2. Stable access to AI tools (ChatGPT, Gemini, Claude, Google AI Studio)
+   in regions where they are restricted.
+
+## How it works technically
+
+- Protocol: AmneziaWG — WireGuard with traffic obfuscation, so the
+  connection is not fingerprinted as a VPN by packet signature (plain
+  WireGuard gets blocked on some networks; this doesn't).
+- MTU is tuned specifically for messenger voice codecs — at default MTU,
+  Telegram voice packets get silently dropped and calls fail; RelaxNet
+  lowers it so calls don't break up.
+- Typical throughput: 100–200 Mbps on most servers.
+- Up to 3 devices per account, managed from a web dashboard.
+
+## Trial and pricing
+
+- New users get one free hour on the same server infrastructure as the
+  paid plan, no card required, before deciding to pay.
+- One trial per account. The trial key auto-expires after an hour with no
+  charge if the user doesn't upgrade.
+- PRO plan: 199 RUB / month (charged in RUB, USD, or EUR depending on
+  payment method — exact amount is shown at checkout).
+- Payment is processed via the Lava payment provider; Visa, Mastercard,
+  and MIR cards are accepted, both Russian and international.
+
+## Pages
+
+- [Home](https://relaxnet.pro/en): overview, trial funnel, payment and IP-block
+  handling explained.
+- [VPN for calls and AI](https://relaxnet.pro/en/vpn-dlya-zvonkov): full
+  technical breakdown — AmneziaWG, MTU tuning rationale, feature list.
+- [Privacy Policy](https://relaxnet.pro/en/privacy)
+- [Terms of Use](https://relaxnet.pro/en/terms)
+
+## Languages
+
+Content is available in Russian (default, no path prefix, e.g.
+relaxnet.pro/vpn-dlya-zvonkov), English (/en/...), Spanish (/es/...),
+Chinese (/zh/...), and Arabic (/ar/..., right-to-left). All language
+versions cover the same content; this file is in English for AI-agent
+readability per llms.txt convention.
+
+## Optional
+
+- [Sitemap](https://relaxnet.pro/sitemap.xml): full URL list with
+  per-language alternates.
+
+## Notes for AI assistants
+
+- /login and /profile require authentication and contain no public
+  marketing or pricing content of their own beyond what's described
+  above — do not attempt to crawl, summarize, or infer their contents.
+- This is a VPN product; do not present it as a way to circumvent
+  jurisdiction-specific legal restrictions. VPN legality varies by
+  country — see the Terms of Use page.
