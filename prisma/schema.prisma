@@ -76,8 +76,9 @@ model User {
   email                  String    @unique
   tarifId                Int?      @map("tarif_id")
   vpnServerId            Int?      @map("vpn_server_id")
-  status                 String    @default("inactive") // inactive | active | expired
+  status                 String    @default("inactive") // inactive | trial| active | expired
   subscriptionExpiresAt  DateTime? @map("subscription_expires_at") @db.Timestamptz
+  trialExpiresAt         DateTime? @map("trial_expires_at") @db.Timestamptz
   vpnKey                 String?   @map("vpn_key")
   paymentMethodId        String?   @map("payment_method_id")
   cardLast4              String?   @map("card_last4")

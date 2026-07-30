@@ -3,6 +3,7 @@ import sql from '@/lib/db';
 import { fetchInvoiceStatus, isCompleted, verifyWebhookAuth, type LavaWebhookEvent } from '@/lib/lava';
 import { sendVpnKeyEmail, sendRenewalEmail } from '@/lib/mailer';
 import { issueVpnKey } from '@/lib/vpn';
+import { revokeTrialBeforeUpgrade } from '@/lib/trial';
 
 /**
  * Вебхук lava.top. В кабинете ДВА вебхука на этот URL:
@@ -98,6 +99,13 @@ async function handleFirstPayment(event: LavaWebhookEvent) {
     console.error(
       `lava: сумма инвойса ${paidAmount} != tarifs.price_rub ${tarif.price_rub} (contractId=${event.contractId})`
     );
+  }
+
+  // Был триал — снимаем его ключ перед выдачей PRO, чтобы не занимал слот.
+  try {
+    await revokeTrialBeforeUpgrade(userId);
+  } catch (e) {
+    console.error('revokeTrialBeforeUpgrade failed:', e); // оплату не блокируем
   }
 
   // Выдача ключа ДО пометки succeeded (см. шапку файла)

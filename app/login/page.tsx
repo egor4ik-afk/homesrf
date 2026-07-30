@@ -8,6 +8,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get('from') || '/profile';
+  const next = searchParams.get('next'); // 'trial' → сразу выдать тест
 
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -47,6 +48,17 @@ function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Неверный код');
+
+      // Пришли за тестом — выдаём ключ на час. Ошибку не роняем в лицо:
+      // всё равно ведём в профиль, там покажется статус или причина.
+      if (next === 'trial') {
+        try {
+          await fetch('/api/trial/start', { method: 'POST' });
+        } catch {
+          /* профиль покажет, что пошло не так */
+        }
+      }
+
       router.push(from);
       router.refresh();
     } catch (err) {

@@ -9,18 +9,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Достаем ВСЕ валидные конфиги для юзера, сортируем по дате создания
-  const clientRows = await sql<
-    { id: number; config_text: string; assign_country: string | null }[]
-  >`
-    SELECT vc.id, vc.config_text, vs.assign_country
-    FROM vpn_clients vc
-    JOIN vpn_servers vs ON vs.id = vc.vpn_server_id
-    WHERE vc.user_id = ${user.id}
-      AND vc.config_text IS NOT NULL
-      AND vc.revoked_at IS NULL
-    ORDER BY vc.created_at ASC
-  `;
+  // Достаем ВСЕ валидные конфиги для юзера, и свежий trial_expires_at
+  const [clientRows, userRows] = await Promise.all([
+    sql<
+      { id: number; config_text: string; assign_country: string | null }[]
+    >`
+      SELECT vc.id, vc.config_text, vs.assign_country
+      FROM vpn_clients vc
+      JOIN vpn_servers vs ON vs.id = vc.vpn_server_id
+      WHERE vc.user_id = ${user.id}
+        AND vc.config_text IS NOT NULL
+        AND vc.revoked_at IS NULL
+      ORDER BY vc.created_at ASC
+    `,
+    sql<{ trial_expires_at: Date | null }[]>`
+      SELECT trial_expires_at FROM users WHERE id = ${user.id}
+    `,
+  ]);
 
   const vpnKeys: { id: number | null; config: string; country: string | null }[] =
     clientRows
@@ -32,9 +37,12 @@ export async function GET() {
     vpnKeys.push({ id: null, config: user.vpn_key, country: null });
   }
 
+  const trialExpiresAt = userRows[0]?.trial_expires_at;
+
   const userWithKeys = {
     ...user,
     vpn_keys: vpnKeys,
+    trial_expires_at: trialExpiresAt ? new Date(trialExpiresAt).toISOString() : null,
   };
 
   return NextResponse.json({ user: userWithKeys });

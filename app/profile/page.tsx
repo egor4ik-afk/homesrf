@@ -1,3 +1,7 @@
+// app/profile/page.tsx  →  ЗАМЕНИТЬ ЦЕЛИКОМ
+// Изменение против твоей версии: тянем trial_expires_at из users и кладём
+// в safeUser, чтобы клиент показал таймер теста. Всё остальное как было.
+
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
@@ -16,7 +20,15 @@ export default async function ProfilePage() {
     ORDER BY price_rub DESC
   `;
 
-  // Достаем ВСЕ валидные конфиги из vpn_clients для этого юзера
+  // trial_expires_at не обязательно есть в getCurrentUser() — берём явно.
+  const trialRows = await sql<{ trial_expires_at: string | null }[]>`
+    SELECT trial_expires_at FROM users WHERE id = ${user.id}
+  `;
+  const trialExpiresAt = trialRows[0]?.trial_expires_at
+    ? new Date(trialRows[0].trial_expires_at).toISOString()
+    : null;
+
+  // Достаём ВСЕ валидные конфиги из vpn_clients для этого юзера
   const clientRows = await sql<
     { id: number; config_text: string; assign_country: string | null }[]
   >`
@@ -31,8 +43,8 @@ export default async function ProfilePage() {
 
   const vpnKeys: { id: number | null; config: string; country: string | null }[] =
     clientRows
-      .filter(r => r.config_text)
-      .map(r => ({ id: r.id, config: r.config_text, country: r.assign_country }));
+      .filter((r) => r.config_text)
+      .map((r) => ({ id: r.id, config: r.config_text, country: r.assign_country }));
 
   const safeUser = {
     id: user.id,
@@ -41,11 +53,14 @@ export default async function ProfilePage() {
     subscription_expires_at: user.subscription_expires_at
       ? new Date(user.subscription_expires_at).toISOString()
       : null,
+    trial_expires_at: trialExpiresAt,
     vpn_key: user.vpn_key,
-    // Вот здесь подмешиваем массив ключей из vpn_clients:
-    vpn_keys: vpnKeys.length > 0
-      ? vpnKeys
-      : (user.vpn_key ? [{ id: null, config: user.vpn_key, country: null }] : []),
+    vpn_keys:
+      vpnKeys.length > 0
+        ? vpnKeys
+        : user.vpn_key
+          ? [{ id: null, config: user.vpn_key, country: null }]
+          : [],
     tarif_id: user.tarif_id,
     tarif_name: user.tarif_name,
     card_last4: user.card_last4,

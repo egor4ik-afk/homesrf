@@ -20,6 +20,7 @@ interface UserData {
   email: string;
   status: string;
   subscription_expires_at: string | null;
+  trial_expires_at?: string | null;
   vpn_key: string | null;
   vpn_keys?: { id: number | null; config: string, country: string | null }[];
   tarif_id: number | null;
@@ -53,6 +54,14 @@ export default function ProfileClient({
     user.status === 'active' &&
     user.subscription_expires_at &&
     new Date(user.subscription_expires_at) > new Date();
+
+  // Триал активен, пока не вышел час. status выставляет /api/trial/start,
+  // гасит cron (expireTrials). Ключи триальщику показываем так же, как
+  // платному, — но с таймером и без кнопки «выпустить ещё».
+  const isTrial =
+    user.status === 'trial' &&
+    !!user.trial_expires_at &&
+    new Date(user.trial_expires_at) > new Date();
 
   // Собираем ключи (если бэк уже отдает массив vpn_keys — берем его, иначе fallback на один vpn_key)
   const userKeys = user.vpn_keys?.length
@@ -168,6 +177,18 @@ export default function ProfileClient({
               чтобы вернуться в RelaxNet. Ключ появится здесь автоматически.
             </p>
           </div>
+        ) : isTrial ? (
+          <>
+            <p className="text-accent text-sm mb-1">Идёт бесплатный тест</p>
+            <p className="text-white/50 text-sm">
+              Доступ до{' '}
+              {new Date(user.trial_expires_at as string).toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              . Понравилось — оформите PRO ниже, ключ выдадим новый.
+            </p>
+          </>
         ) : (
           <p className="text-white/60 text-sm">Подписка не активна</p>
         )}
@@ -203,18 +224,20 @@ export default function ProfileClient({
 
       {/* Инструкция подключения — показываем и до оплаты, чтобы человек заранее
           понимал, как всё устроено. Кнопки в блоках ключей появятся после оплаты. */}
-      {!isActive && (
+      {!isActive && !isTrial && (
         <div className="mb-6">
           <VpnHelp downloadsUrl={DOWNLOADS_URL} />
         </div>
       )}
 
-      {/* Ключи (до 3 штук) — компактный блок над "Скачать клиент" */}
-      {isActive && (
+      {/* Ключи. При триале — показываем, но без кнопки «выпустить ещё». */}
+      {(isActive || isTrial) && (
         <section className="rounded-xl border border-border bg-card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium">Ваши ключи ({userKeys.length} / {MAX_KEYS})</h2>
-            {userKeys.length < MAX_KEYS && (
+            <h2 className="text-base font-medium">
+              {isTrial ? 'Тестовый ключ' : `Ваши ключи (${userKeys.length} / ${MAX_KEYS})`}
+            </h2>
+            {isActive && userKeys.length < MAX_KEYS && (
               <button
                 onClick={generateNewKey}
                 disabled={generating}
