@@ -3,7 +3,7 @@ import sql from '@/lib/db';
 import { fetchInvoiceStatus, isCompleted, verifyWebhookAuth, type LavaWebhookEvent } from '@/lib/lava';
 import { sendVpnKeyEmail, sendRenewalEmail } from '@/lib/mailer';
 import { issueVpnKey } from '@/lib/vpn';
-import { revokeTrialBeforeUpgrade } from '@/lib/trial';
+import { adoptTrialKeyAsPro } from '@/lib/trial';
 
 /**
  * Вебхук lava.top. В кабинете ДВА вебхука на этот URL:
@@ -101,20 +101,21 @@ async function handleFirstPayment(event: LavaWebhookEvent) {
     );
   }
 
-  // Был триал — снимаем его ключ перед выдачей PRO, чтобы не занимал слот.
-  try {
-    await revokeTrialBeforeUpgrade(userId);
-  } catch (e) {
-    console.error('revokeTrialBeforeUpgrade failed:', e); // оплату не блокируем
-  }
-
-  // Выдача ключа ДО пометки succeeded (см. шапку файла)
+  // Оплатил, пока тест ещё шёл — оставляем ТОТ ЖЕ проверенный ключ.
+  // adoptTrialKeyAsPro вернёт его config_text и снимет часовую метку.
+  // Если тест уже истёк (ключ снят cron'ом) — вернёт null, тогда
+  // выпускаем новый ключ как при обычной оплате.
   let vpnKey: string;
   try {
-    const issued = await issueVpnKey(userId, tarif.id as number);
-    vpnKey = issued.configText;
+    const adopted = await adoptTrialKeyAsPro(userId);
+    if (adopted) {
+      vpnKey = adopted;
+    } else {
+      const issued = await issueVpnKey(userId, tarif.id as number);
+      vpnKey = issued.configText;
+    }
   } catch (e) {
-    console.error('issueVpnKey failed, ждём ретрая вебхука:', e);
+    console.error('issue/adopt key failed, ждём ретрая вебхука:', e);
     return NextResponse.json({ error: 'key issue failed' }, { status: 502 });
   }
 

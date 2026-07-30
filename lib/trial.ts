@@ -190,16 +190,31 @@ export async function expireLapsedPro(): Promise<{ done: number; failed: number 
 }
 
 /**
- * Вызывается из вебхука оплаты ПЕРЕД выдачей PRO-ключа. Если человек
- * оплатил, не дождавшись конца тестового часа, триальный ключ надо снять:
- * иначе он останется висеть и займёт одно из трёх устройств, а cron всё
- * равно снимет его через час — уже после оплаты, и это будет выглядеть
- * как «оплатил и отвалилось».
+ * Апгрейд триала в PRO БЕЗ смены ключа. Триальный пир на ноде уже живой
+ * и проверенный человеком — оставляем его, просто снимаем «часовую» метку
+ * trial_expires_at, чтобы cron (expireTrials) больше не считал юзера
+ * триальщиком и не снял ключ через час. Новый ключ НЕ выпускаем.
+ *
+ * Возвращает config_text усыновлённого ключа, либо null — если усыновлять
+ * нечего (не триал / ключ уже снят cron'ом после истечения часа). В случае
+ * null вебхук выдаёт новый ключ как обычно.
+ *
+ * status и subscription_expires_at здесь НЕ трогаем — их выставит вебхук
+ * ниже по коду тем же UPDATE, что и для обычной оплаты.
  */
-export async function revokeTrialBeforeUpgrade(userId: number) {
+export async function adoptTrialKeyAsPro(userId: number): Promise<string | null> {
   const rows = await sql<{ status: string }[]>`SELECT status FROM users WHERE id = ${userId}`;
-  if (rows[0]?.status !== 'trial') return;
-  await revokeUserKeys(userId);
-  // Метку trial_expires_at НЕ трогаем — она остаётся заполненной, чтобы
-  // повторно тест взять было нельзя.
+  if (rows[0]?.status !== 'trial') return null;
+
+  const keys = await sql<{ config_text: string }[]>`
+    SELECT config_text FROM vpn_clients
+    WHERE user_id = ${userId} AND revoked_at IS NULL AND config_text IS NOT NULL
+    ORDER BY created_at ASC
+    LIMIT 1
+  `;
+  if (!keys[0]) return null; // живого триал-ключа нет — пусть выдаётся новый
+
+  // Снимаем часовую метку: с этого момента сроком рулит subscription_expires_at.
+  await sql`UPDATE users SET trial_expires_at = NULL WHERE id = ${userId}`;
+  return keys[0].config_text;
 }

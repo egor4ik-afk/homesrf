@@ -34,7 +34,7 @@ export default function LandingPage() {
 
       {/* Единственный H1 на странице */}
       <h1 className="text-4xl sm:text-5xl font-medium leading-tight mb-6">
-      Один VPN на звонки, , и AI<br />
+        Один VPN на звонки, мессенджеры и AI<br />
         <span className="text-white/60">и он не отваливается</span>
       </h1>
 
@@ -98,8 +98,18 @@ export default function LandingPage() {
         </div>
 
         <p className="text-white/40 text-xs mt-4">
-          Один тест на аккаунт. По истечении часа ключ отключается сам —
-          удалять ничего не нужно, списаний не будет.
+          Вход по коду на почту, пароли не нужны. Оплатите до конца теста — и
+          ключ выпускать заново не придётся, он продолжит работать. Один тест
+          на аккаунт; по истечении часа ключ отключается сам, списаний не будет.
+        </p>
+      </section>
+
+      <section className="mb-14">
+        <h2 className="text-xl font-medium mb-4">Оплата — картой любой страны</h2>
+        <p className="text-white/70 leading-relaxed">
+          Принимаем карты Visa, Mastercard и МИР — российские и зарубежные. Для карт
+          РФ оплата в рублях, для остальных — в USD или EUR. Платёж проходит через
+          Lava, данные карты обрабатывает провайдер, мы их не храним.
         </p>
       </section>
 

@@ -120,9 +120,25 @@ export default function ProfileClient({
       const res = await fetch('/api/trial/start', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Не удалось выдать тест');
-      router.refresh(); // перечитает серверные данные → покажется ключ и таймер
+
+      // Кладём статус, срок и ключ прямо в стейт — ключ появится сразу,
+      // без перезагрузки страницы.
+      setUser((prev) => ({
+        ...prev,
+        status: 'trial',
+        trial_expires_at: data.expiresAt,
+        vpn_keys: [{ id: null, config: data.config, country: null }],
+      }));
+
+      // Плавно проскроллить к блоку ключа.
+      setTimeout(() => {
+        document
+          .getElementById('vpn-keys')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
       setTrialLoading(false);
     }
   }
@@ -203,7 +219,8 @@ export default function ProfileClient({
                 hour: '2-digit',
                 minute: '2-digit',
               })}
-              . Понравилось — оформите PRO ниже, ключ выдадим новый.
+              . Оплатите, пока идёт тест, — этот же ключ продолжит работать,
+              перевыпускать не нужно.
             </p>
           </>
         ) : (
@@ -259,7 +276,7 @@ export default function ProfileClient({
 
       {/* Ключи. При триале — показываем, но без кнопки «выпустить ещё». */}
       {(isActive || isTrial) && (
-        <section className="rounded-xl border border-border bg-card p-6 mb-6">
+        <section id="vpn-keys" className="rounded-xl border border-border bg-card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-medium">
               {isTrial ? 'Тестовый ключ' : `Ваши ключи (${userKeys.length} / ${MAX_KEYS})`}
