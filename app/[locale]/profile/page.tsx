@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import sql from '@/lib/db';
 import { DOWNLOADS_URL } from '@/lib/constants';
 import ProfileClient from '@/components/ProfileClient';
+import { buildAlternates } from '@/lib/seo';
 
 type Props = { params: Promise<{ locale: string }> };
 
@@ -16,7 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: t('profile_title'),
     description: t('profile_desc'),
-    robots: { index: false, follow: true },
+    alternates: buildAlternates(locale, '/profile'),
+    robots: { index: false, follow: false },
   };
 }
 

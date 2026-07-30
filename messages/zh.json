@@ -3,7 +3,15 @@
     "home_title": "RelaxNet — VPN for calls and AI access",
     "home_desc": "100–200 Mbps VPN: Telegram and WhatsApp calls, access to ChatGPT, Gemini and Claude. One free hour to test before you pay.",
     "vpn_title": "VPN for Telegram calls and ChatGPT access",
-    "vpn_desc": "Uninterrupted Telegram and WhatsApp calls, 100–200 Mbps speed, access to ChatGPT, Gemini, Claude and Google AI Studio. One free hour to test before you pay."
+    "vpn_desc": "Uninterrupted Telegram and WhatsApp calls, 100–200 Mbps speed, access to ChatGPT, Gemini, Claude and Google AI Studio. One free hour to test before you pay.",
+    "login_title": "登录 RelaxNet",
+    "login_desc": "使用发送到您邮箱的代码登录——无需密码.",
+    "profile_title": "个人资料",
+    "profile_desc": "您的 RelaxNet 仪表板.",
+    "privacy_title": "隐私政策",
+    "privacy_desc": "RelaxNet 如何处理您的邮箱、支付数据及连接技术数据。",
+    "terms_title": "使用条款",
+    "terms_desc": "RelaxNet PRO 订阅服务的 VPN 访问条款。"
   },
   "nav": {
     "brand": "RelaxNet",

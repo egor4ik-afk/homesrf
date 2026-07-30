@@ -1,23 +1,18 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
+import { buildAlternates, localeUrl } from '@/lib/seo';
 
 type Props = { params: Promise<{ locale: string }> };
-
-function pageUrl(locale: string) {
-  const path = locale === 'ru' ? '' : `/${locale}`;
-  return `https://relaxnet.pro${path}/vpn-dlya-zvonkov`;
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'meta' });
-  const url = pageUrl(locale);
   return {
     title: t('vpn_title'),
     description: t('vpn_desc'),
-    alternates: { canonical: url },
-    openGraph: { title: t('vpn_title'), description: t('vpn_desc'), url, type: 'article' },
+    alternates: buildAlternates(locale, '/vpn-dlya-zvonkov'),
+    openGraph: { title: t('vpn_title'), description: t('vpn_desc'), url: localeUrl(locale, '/vpn-dlya-zvonkov'), type: 'article' },
     twitter: { title: t('vpn_title'), description: t('vpn_desc') },
   };
 }
@@ -27,7 +22,7 @@ export default async function VpnForCallsPage({ params }: Props) {
   const t = await getTranslations({ locale, namespace: 'vpn' });
   const nav = await getTranslations({ locale, namespace: 'nav' });
   const meta = await getTranslations({ locale, namespace: 'meta' });
-  const url = pageUrl(locale);
+  const url = localeUrl(locale, '/vpn-dlya-zvonkov');
 
   const jsonLd = {
     '@context': 'https://schema.org',

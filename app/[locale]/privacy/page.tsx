@@ -1,5 +1,20 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { buildAlternates } from '@/lib/seo';
+
+type Props = { params: { locale: string } };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = params;
+  const t = await getTranslations({ locale, namespace: 'meta' });
+  return {
+    title: t('privacy_title'),
+    description: t('privacy_desc'),
+    alternates: buildAlternates(locale, '/privacy'),
+  };
+}
 
 export default function PrivacyPage() {
   const t = useTranslations('privacy');

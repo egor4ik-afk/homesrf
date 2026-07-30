@@ -7,7 +7,11 @@
     "login_title": "Вход в RelaxNet",
     "login_desc": "Войдите по коду с почты — пароль не нужен.",
     "profile_title": "Профиль",
-    "profile_desc": "Личный кабинет RelaxNet."
+    "profile_desc": "Личный кабинет RelaxNet.",
+    "privacy_title": "Политика конфиденциальности",
+    "privacy_desc": "Как RelaxNet обрабатывает email, данные об оплате и технические данные подключения.",
+    "terms_title": "Условия использования",
+    "terms_desc": "Условия предоставления VPN-доступа по подписке RelaxNet PRO."
   },
   "nav": {
     "brand": "RelaxNet",

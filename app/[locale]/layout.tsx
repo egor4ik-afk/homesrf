@@ -4,9 +4,10 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { notFound } from 'next/navigation';
 import Script from 'next/script';
 import '../globals.css';
-import { locales, rtlLocales, hreflangMap, defaultLocale, type Locale } from '@/i18n/config';
+import { locales, rtlLocales, type Locale } from '@/i18n/config';
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import Nav from '@/components/Nav';
+import { buildAlternates, localeUrl } from '@/lib/seo';
 
 export const viewport: Viewport = {
   themeColor: '#0b0c10',
@@ -25,23 +26,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!locales.includes(locale as Locale)) notFound();
   const t = await getTranslations({ locale, namespace: 'meta' });
 
-  const localePath = locale === defaultLocale ? '' : `/${locale}`;
-  const canonical = `https://relaxnet.pro${localePath}`;
-
-  const languages: Record<string, string> = {};
-  locales.forEach((l) => {
-    const p = l === defaultLocale ? '' : `/${l}`;
-    languages[hreflangMap[l]] = `https://relaxnet.pro${p}`;
-  });
-  languages['x-default'] = 'https://relaxnet.pro';
-
   return {
     metadataBase: new URL('https://relaxnet.pro'),
     title: { default: t('home_title'), template: '%s — RelaxNet' },
     description: t('home_desc'),
     applicationName: 'RelaxNet',
     manifest: '/site.webmanifest',
-    alternates: { canonical, languages },
+    alternates: buildAlternates(locale),
     icons: {
       icon: [
         { url: '/favicon.svg', type: 'image/svg+xml' },
@@ -53,7 +44,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: t('home_title'),
       description: t('home_desc'),
-      url: canonical,
+      url: localeUrl(locale),
       siteName: 'RelaxNet',
       locale: locale === 'ru' ? 'ru_RU' : locale,
       type: 'website',

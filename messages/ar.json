@@ -7,7 +7,11 @@
     "login_title": "تسجيل الدخول إلى RelaxNet",
     "login_desc": "سجّل الدخول برمز يُرسل إلى بريدك الإلكتروني — دون الحاجة لكلمة مرور.",
     "profile_title": "الملف الشخصي",
-    "profile_desc": "لوحة تحكم RelaxNet الخاصة بك."
+    "profile_desc": "لوحة تحكم RelaxNet الخاصة بك.",
+    "privacy_title": "سياسة الخصوصية",
+    "privacy_desc": "كيف تتعامل RelaxNet مع بريدك الإلكتروني وبيانات الدفع والبيانات التقنية للاتصال.",
+    "terms_title": "شروط الاستخدام",
+    "terms_desc": "شروط الوصول إلى خدمة VPN ضمن اشتراك RelaxNet PRO."
   },
   "nav": {
     "brand": "RelaxNet",

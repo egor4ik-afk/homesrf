@@ -7,7 +7,11 @@
     "login_title": "Iniciar sesión en RelaxNet",
     "login_desc": "Inicia sesión con un código enviado a tu email — sin contraseña.",
     "profile_title": "Perfil",
-    "profile_desc": "Tu panel de RelaxNet."
+    "profile_desc": "Tu panel de RelaxNet.",
+    "privacy_title": "Política de privacidad",
+    "privacy_desc": "Cómo maneja RelaxNet tu email, datos de pago y datos técnicos de conexión.",
+    "terms_title": "Términos de uso",
+    "terms_desc": "Condiciones de acceso al servicio VPN bajo la suscripción RelaxNet PRO."
   },
   "nav": {
     "brand": "RelaxNet",
