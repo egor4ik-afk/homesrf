@@ -40,9 +40,15 @@ model VpnServer {
   lastHealthCheck DateTime? @map("last_health_check") @db.Timestamptz
   sshHost         String?   @map("ssh_host")
 
+  // public  — нода раздаётся всем по тарифу;
+  // private — только ownerUserId, в общую выдачу issueVpnKey не попадает.
+  visibility  String @default("public")
+  ownerUserId Int?   @map("owner_user_id")
+
+  owner           User?  @relation("VpnServerOwner", fields: [ownerUserId], references: [id])
   settings        VpnServerSettings?
   tarifVpnServers TarifVpnServer[]
-  users           User[]
+  users           User[] @relation("UserAssignedServer")
   vpnClients      VpnClient[]
 
   @@map("vpn_servers")
@@ -83,14 +89,17 @@ model User {
   paymentMethodId        String?   @map("payment_method_id")
   cardLast4              String?   @map("card_last4")
   cardType               String?   @map("card_type")
+  isAdmin                Boolean   @default(false) @map("is_admin")
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz
 
-  tarif      Tarif?      @relation(fields: [tarifId], references: [id])
-  vpnServer  VpnServer?  @relation(fields: [vpnServerId], references: [id])
-  sessions   Session[]
-  payments   Payment[]
-  vpnClients VpnClient[]
+  tarif          Tarif?      @relation(fields: [tarifId], references: [id])
+  vpnServer      VpnServer?  @relation("UserAssignedServer", fields: [vpnServerId], references: [id])
+  ownedServers   VpnServer[] @relation("VpnServerOwner")
+  adminAudits    AdminAudit[]
+  sessions       Session[]
+  payments       Payment[]
+  vpnClients     VpnClient[]
 
   @@map("users")
 }
@@ -155,4 +164,22 @@ model VpnClient {
 
   @@unique([vpnServerId, allowedIp])
   @@map("vpn_clients")
+}
+
+// Журнал действий админов: кто, что и над кем. Нужен не для красоты —
+// продление подписки и отзыв ключей меняют деньги и доступ, и без записи
+// разобраться постфактум нельзя.
+model AdminAudit {
+  id         Int      @id @default(autoincrement())
+  adminId    Int      @map("admin_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   Int?     @map("target_id")
+  details    Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@map("admin_audit")
 }

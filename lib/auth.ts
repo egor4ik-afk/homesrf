@@ -13,6 +13,7 @@ export interface CurrentUser {
   payment_method_id: string | null;
   card_last4: string | null;
   card_type: string | null;
+  is_admin: boolean;
 }
 
 /** Читает cookie сессии и достаёт пользователя из БД. null — если не авторизован/сессия истекла. */
@@ -24,7 +25,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const rows = await sql<CurrentUser[]>`
     SELECT
       u.id, u.email, u.status, u.subscription_expires_at, u.vpn_key,
-      u.payment_method_id, u.card_last4, u.card_type,
+      u.payment_method_id, u.card_last4, u.card_type, u.is_admin,
       t.id AS tarif_id, t.name AS tarif_name
     FROM sessions s
     JOIN users u ON u.id = s.user_id

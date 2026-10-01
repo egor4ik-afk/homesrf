@@ -195,9 +195,18 @@ export function buildClientConfig(
   ].join('\n');
 }
 
+/**
+ * Выпускает ключ. serverId — явный выбор ноды; без него берётся случайная
+ * публичная нода тарифа, как было раньше.
+ *
+ * Приватная нода (visibility = 'private') в общую раздачу не попадает
+ * никогда: условие owner_user_id = userId отсекает её для всех, кроме
+ * владельца, даже если она is_healthy и привязана к тарифу.
+ */
 export async function issueVpnKey(
   userId: number,
   tarifId: number,
+  serverId?: number,
 ): Promise<{ id: number; configText: string; country: string | null; serverName: string }> {
   const rows = await sql<
     {
@@ -213,7 +222,10 @@ export async function issueVpnKey(
     FROM tarif_vpn_servers tvs
     JOIN vpn_servers vs ON vs.id = tvs.vpn_server_id
     LEFT JOIN vpn_server_settings vss ON vss.vpn_server_id = vs.id
-    WHERE tvs.tarif_id = ${tarifId} AND vs.is_healthy = TRUE
+    WHERE tvs.tarif_id = ${tarifId}
+      AND vs.is_healthy = TRUE
+      AND (vs.visibility = 'public' OR vs.owner_user_id = ${userId})
+      AND (${serverId ?? null}::int IS NULL OR vs.id = ${serverId ?? null}::int)
     ORDER BY RANDOM()
     LIMIT 1
   `;

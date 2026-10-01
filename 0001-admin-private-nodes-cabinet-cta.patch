@@ -1,0 +1,1483 @@
+From 6b7a349ce8f9273ce3d77572657822608020b334 Mon Sep 17 00:00:00 2001
+From: RelaxNet <dev@relaxnet.pro>
+Date: Thu, 1 Oct 2026 10:34:40 +0000
+Subject: [PATCH] =?UTF-8?q?=D0=90=D0=B4=D0=BC=D0=B8=D0=BD=D0=BA=D0=B0,=20?=
+ =?UTF-8?q?=D0=BF=D1=80=D0=B8=D0=B2=D0=B0=D1=82=D0=BD=D1=8B=D0=B5=20=D0=BD?=
+ =?UTF-8?q?=D0=BE=D0=B4=D1=8B=20=D0=B8=20=D0=BA=D0=BD=D0=BE=D0=BF=D0=BA?=
+ =?UTF-8?q?=D0=B0=20=D0=B2=20=D0=BA=D0=B0=D0=B1=D0=B8=D0=BD=D0=B5=D1=82?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Админка /admin для users.is_admin: сводка (статусы, выручка, последние
+платежи), пользователи (поиск, +30 дней, снятие ключей) и ноды (вкл/выкл,
+видимость). Права — в БД, не списком email в коде: состав админов меняется
+UPDATE-ом, без пересборки. Неадмин получает 404, а не редирект, чтобы
+страница не подтверждала своё существование.
+
+Приватные ноды: vpn_servers.visibility + owner_user_id. В issueVpnKey
+добавлено условие visibility = 'public' OR owner_user_id = userId, поэтому
+приватная нода не попадает в случайную раздачу даже будучи is_healthy и
+привязанной к тарифу. Необязательный serverId позволяет владельцу выпустить
+ключ именно с неё.
+
+Включение ноды из админки запрещено, пока не заполнены vpn_server_settings:
+иначе issueVpnKey выберет её рандомом и уронит выдачу ключей живым людям.
+
+UI: подписчику на главной показывается «Открыть кабинет» вместо двух CTA
+с предложением оформить PRO. Страница стала динамической — иначе кнопка
+застыла бы в одном состоянии для всех.
+
+Журнал admin_audit: продление подписки и отзыв ключей меняют деньги и
+доступ, без записи разобраться постфактум нельзя.
+---
+ app/[locale]/admin/page.tsx         |  26 ++
+ app/[locale]/page.tsx               |  56 ++--
+ app/[locale]/profile/page.tsx       |   1 +
+ app/api/admin/servers/[id]/route.ts |  74 ++++++
+ app/api/admin/servers/route.ts      |  74 ++++++
+ app/api/admin/stats/route.ts        |  56 ++++
+ app/api/admin/users/[id]/route.ts   | 152 +++++++++++
+ app/api/admin/users/route.ts        |  67 +++++
+ app/api/vpn/generate/route.ts       |  12 +-
+ components/AdminClient.tsx          | 379 ++++++++++++++++++++++++++++
+ components/ProfileClient.tsx        |  14 +-
+ db/migrations/2026-10-admin.sql     |  67 +++++
+ lib/admin.ts                        |  81 ++++++
+ lib/auth.ts                         |   3 +-
+ lib/vpn.ts                          |  14 +-
+ messages/ar.json                    |   2 +
+ messages/en.json                    |   2 +
+ messages/es.json                    |   2 +
+ messages/ru.json                    |   2 +
+ messages/zh.json                    |   1 +
+ middleware.ts                       |   5 +-
+ prisma/schema.prisma                |  39 ++-
+ 22 files changed, 1099 insertions(+), 30 deletions(-)
+ create mode 100644 app/[locale]/admin/page.tsx
+ create mode 100644 app/api/admin/servers/[id]/route.ts
+ create mode 100644 app/api/admin/servers/route.ts
+ create mode 100644 app/api/admin/stats/route.ts
+ create mode 100644 app/api/admin/users/[id]/route.ts
+ create mode 100644 app/api/admin/users/route.ts
+ create mode 100644 components/AdminClient.tsx
+ create mode 100644 db/migrations/2026-10-admin.sql
+ create mode 100644 lib/admin.ts
+
+diff --git a/app/[locale]/admin/page.tsx b/app/[locale]/admin/page.tsx
+new file mode 100644
+index 0000000..7f6fac1
+--- /dev/null
++++ b/app/[locale]/admin/page.tsx
+@@ -0,0 +1,26 @@
++// app/[locale]/admin/page.tsx
++// Проверка прав — на сервере, до рендера. Неадмин получает 404, а не
++// редирект: так страница не подтверждает своё существование посторонним.
++
++import type { Metadata } from 'next';
++import { notFound, redirect } from 'next/navigation';
++import { getCurrentUser } from '@/lib/auth';
++import { getAdmin } from '@/lib/admin';
++import AdminClient from '@/components/AdminClient';
++
++export const metadata: Metadata = {
++  title: 'Админка — RelaxNet',
++  robots: { index: false, follow: false },
++};
++
++export const dynamic = 'force-dynamic';
++
++export default async function AdminPage() {
++  const user = await getCurrentUser();
++  if (!user) redirect('/login');
++
++  const admin = await getAdmin();
++  if (!admin) notFound();
++
++  return <AdminClient adminEmail={admin.email} />;
++}
+diff --git a/app/[locale]/page.tsx b/app/[locale]/page.tsx
+index 35b32d2..3fa190b 100644
+--- a/app/[locale]/page.tsx
++++ b/app/[locale]/page.tsx
+@@ -1,8 +1,23 @@
+-import { useTranslations } from 'next-intl';
++import { getTranslations } from 'next-intl/server';
+ import { Link } from '@/i18n/navigation';
++import { getCurrentUser } from '@/lib/auth';
+ 
+-export default function LandingPage() {
+-  const t = useTranslations('home');
++// Страница читает cookie сессии, поэтому рендерится на запрос, а не в билде:
++// иначе кнопка застыла бы в одном состоянии для всех посетителей.
++export const dynamic = 'force-dynamic';
++
++type Props = { params: Promise<{ locale: string }> };
++
++export default async function LandingPage({ params }: Props) {
++  const { locale } = await params;
++  const t = await getTranslations({ locale, namespace: 'home' });
++
++  // Подписчику незачем предлагать оформить PRO — ведём сразу в кабинет.
++  const user = await getCurrentUser();
++  const hasAccess =
++    user?.status === 'active' &&
++    !!user.subscription_expires_at &&
++    new Date(user.subscription_expires_at) > new Date();
+ 
+   return (
+     <main className="max-w-3xl mx-auto px-6 py-20">
+@@ -48,18 +63,29 @@ export default function LandingPage() {
+         </ol>
+ 
+         <div className="flex flex-col sm:flex-row gap-3">
+-          <Link
+-            href="/login?next=trial"
+-            className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+-          >
+-            {t('cta_try')}
+-          </Link>
+-          <Link
+-            href="/login"
+-            className="px-6 py-3 rounded-lg border border-border text-white/80 font-medium text-center transition hover:border-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+-          >
+-            {t('cta_pay')}
+-          </Link>
++          {hasAccess ? (
++            <Link
++              href="/profile"
++              className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
++            >
++              {t('cta_cabinet')}
++            </Link>
++          ) : (
++            <>
++              <Link
++                href="/login?next=trial"
++                className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
++              >
++                {t('cta_try')}
++              </Link>
++              <Link
++                href="/login"
++                className="px-6 py-3 rounded-lg border border-border text-white/80 font-medium text-center transition hover:border-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
++              >
++                {t('cta_pay')}
++              </Link>
++            </>
++          )}
+         </div>
+ 
+         <p className="text-white/40 text-xs mt-4">{t('funnel_note')}</p>
+diff --git a/app/[locale]/profile/page.tsx b/app/[locale]/profile/page.tsx
+index 0ba34bd..bc23245 100644
+--- a/app/[locale]/profile/page.tsx
++++ b/app/[locale]/profile/page.tsx
+@@ -78,6 +78,7 @@ export default async function ProfilePage() {
+     tarif_name: user.tarif_name,
+     card_last4: user.card_last4,
+     card_type: user.card_type,
++    is_admin: user.is_admin,
+   };
+ 
+   return (
+diff --git a/app/api/admin/servers/[id]/route.ts b/app/api/admin/servers/[id]/route.ts
+new file mode 100644
+index 0000000..ef32188
+--- /dev/null
++++ b/app/api/admin/servers/[id]/route.ts
+@@ -0,0 +1,74 @@
++// app/api/admin/servers/[id]/route.ts — вкл/выкл ноды и смена видимости.
++
++import { NextRequest, NextResponse } from 'next/server';
++import sql from '@/lib/db';
++import { requireAdmin, adminErrorResponse, audit } from '@/lib/admin';
++
++export const dynamic = 'force-dynamic';
++
++export async function PATCH(
++  req: NextRequest,
++  { params }: { params: Promise<{ id: string }> },
++) {
++  try {
++    const admin = await requireAdmin();
++
++    const { id } = await params;
++    const serverId = Number(id);
++    if (!Number.isInteger(serverId) || serverId <= 0) {
++      return NextResponse.json({ error: 'Некорректный id' }, { status: 400 });
++    }
++
++    const body = await req.json().catch(() => ({}));
++    const action = String(body.action ?? '');
++
++    switch (action) {
++      case 'health': {
++        const value = Boolean(body.value);
++
++        // Включать ноду без настроек нельзя: issueVpnKey выберет её
++        // (ORDER BY RANDOM()) и упадёт на отсутствии endpoint/serverPublicKey,
++        // а пользователь увидит «Ошибка сервера» при выдаче ключа.
++        if (value) {
++          const ready = await sql<{ ok: boolean }[]>`
++            SELECT (vss.settings IS NOT NULL
++                    AND vss.settings ? 'endpoint'
++                    AND vss.settings ? 'serverPublicKey') AS ok
++            FROM vpn_servers vs
++            LEFT JOIN vpn_server_settings vss ON vss.vpn_server_id = vs.id
++            WHERE vs.id = ${serverId}
++          `;
++          if (!ready[0]?.ok) {
++            return NextResponse.json(
++              { error: 'Сначала заполните vpn_server_settings (endpoint, serverPublicKey, awg)' },
++              { status: 400 },
++            );
++          }
++        }
++
++        await sql`UPDATE vpn_servers SET is_healthy = ${value} WHERE id = ${serverId}`;
++        await audit(admin.id, 'server_health', 'server', serverId, { value });
++        return NextResponse.json({ ok: true });
++      }
++
++      case 'visibility': {
++        const visibility = body.visibility === 'private' ? 'private' : 'public';
++        const ownerId = visibility === 'private' ? (Number(body.owner_user_id) || admin.id) : null;
++
++        await sql`
++          UPDATE vpn_servers
++          SET visibility = ${visibility}, owner_user_id = ${ownerId}
++          WHERE id = ${serverId}
++        `;
++        await audit(admin.id, 'server_visibility', 'server', serverId, { visibility, ownerId });
++        return NextResponse.json({ ok: true });
++      }
++
++      default:
++        return NextResponse.json({ error: 'action: health | visibility' }, { status: 400 });
++    }
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
+diff --git a/app/api/admin/servers/route.ts b/app/api/admin/servers/route.ts
+new file mode 100644
+index 0000000..3430806
+--- /dev/null
++++ b/app/api/admin/servers/route.ts
+@@ -0,0 +1,74 @@
++// app/api/admin/servers/route.ts — список нод и добавление новой.
++
++import { NextRequest, NextResponse } from 'next/server';
++import sql from '@/lib/db';
++import { requireAdmin, adminErrorResponse, audit } from '@/lib/admin';
++
++export const dynamic = 'force-dynamic';
++
++export async function GET() {
++  try {
++    await requireAdmin();
++
++    const servers = await sql`
++      SELECT
++        vs.id, vs.name, vs.ip, vs.ssh_host, vs.assign_country,
++        vs.is_healthy, vs.visibility, vs.owner_user_id,
++        ou.email AS owner_email,
++        COUNT(vc.id) FILTER (WHERE vc.revoked_at IS NULL)::int AS live_keys,
++        (vss.vpn_server_id IS NOT NULL) AS has_settings,
++        ARRAY_REMOVE(ARRAY_AGG(DISTINCT t.name), NULL) AS tarifs
++      FROM vpn_servers vs
++      LEFT JOIN users ou ON ou.id = vs.owner_user_id
++      LEFT JOIN vpn_clients vc ON vc.vpn_server_id = vs.id
++      LEFT JOIN vpn_server_settings vss ON vss.vpn_server_id = vs.id
++      LEFT JOIN tarif_vpn_servers tvs ON tvs.vpn_server_id = vs.id
++      LEFT JOIN tarifs t ON t.id = tvs.tarif_id
++      GROUP BY vs.id, ou.email, vss.vpn_server_id
++      ORDER BY vs.id
++    `;
++
++    return NextResponse.json({ servers });
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
++
++export async function POST(req: NextRequest) {
++  try {
++    const admin = await requireAdmin();
++
++    const body = await req.json().catch(() => ({}));
++    const name = String(body.name ?? '').trim();
++    const ip = String(body.ip ?? '').trim();
++    const sshHost = String(body.ssh_host ?? ip).trim();
++    const country = String(body.assign_country ?? '').trim() || null;
++    const visibility = body.visibility === 'private' ? 'private' : 'public';
++
++    if (!name || !ip) {
++      return NextResponse.json({ error: 'name и ip обязательны' }, { status: 400 });
++    }
++
++    // Приватная нода без владельца невидима вообще никому — вешаем на
++    // того админа, который её создал.
++    const ownerId = visibility === 'private' ? admin.id : null;
++
++    const inserted = await sql<{ id: number }[]>`
++      INSERT INTO vpn_servers (name, ip, ssh_host, assign_country, is_healthy, visibility, owner_user_id)
++      VALUES (${name}, ${ip}, ${sshHost}, ${country}, FALSE, ${visibility}, ${ownerId})
++      RETURNING id
++    `;
++
++    await audit(admin.id, 'server_create', 'server', inserted[0].id, { name, ip, visibility });
++
++    return NextResponse.json({
++      ok: true,
++      id: inserted[0].id,
++      note: 'Нода создана выключенной (is_healthy = false). Заполните vpn_server_settings по VPN-SETUP.md, привяжите к тарифу и только потом включайте.',
++    });
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
+diff --git a/app/api/admin/stats/route.ts b/app/api/admin/stats/route.ts
+new file mode 100644
+index 0000000..6caf4f2
+--- /dev/null
++++ b/app/api/admin/stats/route.ts
+@@ -0,0 +1,56 @@
++// app/api/admin/stats/route.ts — сводка для дашборда админки.
++
++import { NextResponse } from 'next/server';
++import sql from '@/lib/db';
++import { requireAdmin, adminErrorResponse } from '@/lib/admin';
++
++export const dynamic = 'force-dynamic';
++
++export async function GET() {
++  try {
++    await requireAdmin();
++
++    const [byStatus, keys, revenue, servers, recent] = await Promise.all([
++      sql<{ status: string; count: number }[]>`
++        SELECT status, COUNT(*)::int AS count FROM users GROUP BY status ORDER BY count DESC
++      `,
++      sql<{ live: number; revoked: number }[]>`
++        SELECT
++          COUNT(*) FILTER (WHERE revoked_at IS NULL)::int     AS live,
++          COUNT(*) FILTER (WHERE revoked_at IS NOT NULL)::int AS revoked
++        FROM vpn_clients
++      `,
++      sql<{ month: string; total: number; count: number }[]>`
++        SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
++               COALESCE(SUM(amount), 0)::float AS total,
++               COUNT(*)::int AS count
++        FROM payments
++        WHERE status = 'succeeded' AND created_at > NOW() - INTERVAL '6 months'
++        GROUP BY 1 ORDER BY 1 DESC
++      `,
++      sql<{ id: number; name: string; ip: string; is_healthy: boolean; visibility: string; clients: number }[]>`
++        SELECT vs.id, vs.name, vs.ip, vs.is_healthy, vs.visibility,
++               COUNT(vc.id) FILTER (WHERE vc.revoked_at IS NULL)::int AS clients
++        FROM vpn_servers vs
++        LEFT JOIN vpn_clients vc ON vc.vpn_server_id = vs.id
++        GROUP BY vs.id ORDER BY vs.id
++      `,
++      sql<{ email: string; amount: number; status: string; created_at: string }[]>`
++        SELECT u.email, p.amount::float, p.status, p.created_at
++        FROM payments p JOIN users u ON u.id = p.user_id
++        ORDER BY p.created_at DESC LIMIT 10
++      `,
++    ]);
++
++    return NextResponse.json({
++      byStatus,
++      keys: keys[0] ?? { live: 0, revoked: 0 },
++      revenue,
++      servers,
++      recentPayments: recent,
++    });
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
+diff --git a/app/api/admin/users/[id]/route.ts b/app/api/admin/users/[id]/route.ts
+new file mode 100644
+index 0000000..905e1d1
+--- /dev/null
++++ b/app/api/admin/users/[id]/route.ts
+@@ -0,0 +1,152 @@
++// app/api/admin/users/[id]/route.ts
++// ─────────────────────────────────────────────────────────────────────────
++// Действия админа над пользователем:
++//   extend   — продлить подписку на N дней (и вернуть в active)
++//   status   — выставить статус вручную
++//   revoke   — снять все ключи (пиры с нод + revoked_at)
++//   admin    — выдать/забрать права админа
++//
++// Почему extend не трогает ключи: продление по смыслу не меняет доступ,
++// пиры на нодах остаются живыми. А вот возврат из 'expired' в 'active'
++// ключи НЕ воскрешает — cron их уже снял с ноды. Об этом сообщаем в
++// ответе, чтобы админ не думал, что доступ восстановился сам.
++// ─────────────────────────────────────────────────────────────────────────
++
++import { NextRequest, NextResponse } from 'next/server';
++import sql from '@/lib/db';
++import { requireAdmin, adminErrorResponse, audit } from '@/lib/admin';
++import { revokeUserKeys } from '@/lib/vpn';
++
++export const dynamic = 'force-dynamic';
++
++const ALLOWED_STATUSES = ['active', 'inactive', 'trial', 'expired'] as const;
++
++export async function PATCH(
++  req: NextRequest,
++  { params }: { params: Promise<{ id: string }> },
++) {
++  try {
++    const admin = await requireAdmin();
++
++    const { id } = await params;
++    const userId = Number(id);
++    if (!Number.isInteger(userId) || userId <= 0) {
++      return NextResponse.json({ error: 'Некорректный id' }, { status: 400 });
++    }
++
++    const body = await req.json().catch(() => ({}));
++    const action = String(body.action ?? '');
++
++    const exists = await sql<{ id: number; email: string }[]>`
++      SELECT id, email FROM users WHERE id = ${userId}
++    `;
++    if (!exists[0]) {
++      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 });
++    }
++
++    switch (action) {
++      case 'extend': {
++        const days = Number(body.days);
++        if (!Number.isFinite(days) || days === 0 || Math.abs(days) > 3650) {
++          return NextResponse.json({ error: 'days: число от -3650 до 3650' }, { status: 400 });
++        }
++        // GREATEST, чтобы продление не укорачивало уже оплаченный срок.
++        const updated = await sql<{ subscription_expires_at: string }[]>`
++          UPDATE users SET
++            subscription_expires_at =
++              GREATEST(COALESCE(subscription_expires_at, NOW()), NOW())
++              + (${days} || ' days')::interval,
++            status = CASE WHEN ${days} > 0 THEN 'active' ELSE status END,
++            updated_at = NOW()
++          WHERE id = ${userId}
++          RETURNING subscription_expires_at
++        `;
++        await audit(admin.id, 'extend', 'user', userId, { days });
++        return NextResponse.json({
++          ok: true,
++          subscription_expires_at: updated[0].subscription_expires_at,
++          note: 'Срок сдвинут. Если ключи были отозваны ранее, их нужно выпустить заново.',
++        });
++      }
++
++      case 'status': {
++        const next = String(body.status ?? '');
++        if (!ALLOWED_STATUSES.includes(next as (typeof ALLOWED_STATUSES)[number])) {
++          return NextResponse.json(
++            { error: `status: один из ${ALLOWED_STATUSES.join(', ')}` },
++            { status: 400 },
++          );
++        }
++        await sql`UPDATE users SET status = ${next}, updated_at = NOW() WHERE id = ${userId}`;
++        await audit(admin.id, 'status', 'user', userId, { status: next });
++        return NextResponse.json({ ok: true });
++      }
++
++      case 'revoke': {
++        // Долгая операция: SSH к каждой ноде. Таймаут ssh — 20 с на ключ.
++        await revokeUserKeys(userId);
++        await audit(admin.id, 'revoke', 'user', userId);
++        return NextResponse.json({ ok: true });
++      }
++
++      case 'admin': {
++        const value = Boolean(body.value);
++        if (userId === admin.id && !value) {
++          return NextResponse.json(
++            { error: 'Нельзя снять права с самого себя' },
++            { status: 400 },
++          );
++        }
++        await sql`UPDATE users SET is_admin = ${value} WHERE id = ${userId}`;
++        await audit(admin.id, 'admin', 'user', userId, { value });
++        return NextResponse.json({ ok: true });
++      }
++
++      default:
++        return NextResponse.json(
++          { error: 'action: extend | status | revoke | admin' },
++          { status: 400 },
++        );
++    }
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
++
++/** Детали одного пользователя: ключи с нодами и история платежей. */
++export async function GET(
++  _req: NextRequest,
++  { params }: { params: Promise<{ id: string }> },
++) {
++  try {
++    await requireAdmin();
++
++    const { id } = await params;
++    const userId = Number(id);
++    if (!Number.isInteger(userId) || userId <= 0) {
++      return NextResponse.json({ error: 'Некорректный id' }, { status: 400 });
++    }
++
++    const [keys, payments] = await Promise.all([
++      sql`
++        SELECT vc.id, vc.allowed_ip, vc.created_at, vc.revoked_at,
++               vs.name AS server_name, vs.assign_country
++        FROM vpn_clients vc
++        JOIN vpn_servers vs ON vs.id = vc.vpn_server_id
++        WHERE vc.user_id = ${userId}
++        ORDER BY vc.created_at DESC
++      `,
++      sql`
++        SELECT id, amount::float, status, provider, created_at
++        FROM payments WHERE user_id = ${userId}
++        ORDER BY created_at DESC LIMIT 20
++      `,
++    ]);
++
++    return NextResponse.json({ keys, payments });
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
+diff --git a/app/api/admin/users/route.ts b/app/api/admin/users/route.ts
+new file mode 100644
+index 0000000..1e7c4b7
+--- /dev/null
++++ b/app/api/admin/users/route.ts
+@@ -0,0 +1,67 @@
++// app/api/admin/users/route.ts — список пользователей с поиском.
++
++import { NextRequest, NextResponse } from 'next/server';
++import sql from '@/lib/db';
++import { requireAdmin, adminErrorResponse } from '@/lib/admin';
++
++export const dynamic = 'force-dynamic';
++
++const PAGE_SIZE = 50;
++
++export async function GET(req: NextRequest) {
++  try {
++    await requireAdmin();
++
++    const { searchParams } = new URL(req.url);
++    const q = (searchParams.get('q') ?? '').trim().toLowerCase();
++    const status = searchParams.get('status') ?? '';
++    const page = Math.max(1, Number(searchParams.get('page') ?? 1));
++    const offset = (page - 1) * PAGE_SIZE;
++
++    // Фильтры подставляем через параметры — конкатенация SQL здесь
++    // недопустима даже для админки: q приходит из строки браузера.
++    const rows = await sql<
++      {
++        id: number;
++        email: string;
++        status: string;
++        is_admin: boolean;
++        subscription_expires_at: string | null;
++        trial_expires_at: string | null;
++        tarif_name: string | null;
++        live_keys: number;
++        created_at: string;
++      }[]
++    >`
++      SELECT
++        u.id, u.email, u.status, u.is_admin,
++        u.subscription_expires_at, u.trial_expires_at, u.created_at,
++        t.name AS tarif_name,
++        COUNT(vc.id) FILTER (WHERE vc.revoked_at IS NULL)::int AS live_keys
++      FROM users u
++      LEFT JOIN tarifs t ON t.id = u.tarif_id
++      LEFT JOIN vpn_clients vc ON vc.user_id = u.id
++      WHERE (${q} = '' OR lower(u.email) LIKE ${'%' + q + '%'})
++        AND (${status} = '' OR u.status = ${status})
++      GROUP BY u.id, t.name
++      ORDER BY u.id DESC
++      LIMIT ${PAGE_SIZE} OFFSET ${offset}
++    `;
++
++    const totalRows = await sql<{ count: number }[]>`
++      SELECT COUNT(*)::int AS count FROM users u
++      WHERE (${q} = '' OR lower(u.email) LIKE ${'%' + q + '%'})
++        AND (${status} = '' OR u.status = ${status})
++    `;
++
++    return NextResponse.json({
++      users: rows,
++      total: totalRows[0]?.count ?? 0,
++      page,
++      pageSize: PAGE_SIZE,
++    });
++  } catch (e) {
++    const { error, status } = adminErrorResponse(e);
++    return NextResponse.json({ error }, { status });
++  }
++}
+diff --git a/app/api/vpn/generate/route.ts b/app/api/vpn/generate/route.ts
+index 2fddbbb..6c25cad 100644
+--- a/app/api/vpn/generate/route.ts
++++ b/app/api/vpn/generate/route.ts
+@@ -1,11 +1,11 @@
+ // app/api/vpn/generate/route.ts
+ 
+-import { NextResponse } from 'next/server';
++import { NextRequest, NextResponse } from 'next/server';
+ import { issueVpnKey } from '@/lib/vpn';
+ import { getCurrentUser } from '@/lib/auth';
+ import sql from '@/lib/db';
+ 
+-export async function POST() {
++export async function POST(req: NextRequest) {
+   try {
+     const user = await getCurrentUser();
+ 
+@@ -33,7 +33,13 @@ export async function POST() {
+       );
+     }
+ 
+-    const { id, configText } = await issueVpnKey(user.id, user.tarif_id);
++    // serverId необязателен. Чужую приватную ноду так не получить:
++    // фильтр в issueVpnKey вернёт пусто и поднимет «Нет живого VPN-сервера».
++    const body = await req.json().catch(() => ({}));
++    const serverId =
++      Number.isInteger(body?.serverId) && body.serverId > 0 ? Number(body.serverId) : undefined;
++
++    const { id, configText } = await issueVpnKey(user.id, user.tarif_id, serverId);
+ 
+     return NextResponse.json({ id, config: configText });
+   } catch (error: unknown) {
+diff --git a/components/AdminClient.tsx b/components/AdminClient.tsx
+new file mode 100644
+index 0000000..1355a23
+--- /dev/null
++++ b/components/AdminClient.tsx
+@@ -0,0 +1,379 @@
++'use client';
++
++// components/AdminClient.tsx
++// Три вкладки: сводка, пользователи, ноды. Стиль — как в ProfileClient
++// (border-border / bg-card / text-accent), отдельной темы не вводим.
++
++import { useCallback, useEffect, useState } from 'react';
++
++type Tab = 'stats' | 'users' | 'servers';
++
++interface Stats {
++  byStatus: { status: string; count: number }[];
++  keys: { live: number; revoked: number };
++  revenue: { month: string; total: number; count: number }[];
++  servers: { id: number; name: string; ip: string; is_healthy: boolean; visibility: string; clients: number }[];
++  recentPayments: { email: string; amount: number; status: string; created_at: string }[];
++}
++
++interface AdminUserRow {
++  id: number;
++  email: string;
++  status: string;
++  is_admin: boolean;
++  subscription_expires_at: string | null;
++  trial_expires_at: string | null;
++  tarif_name: string | null;
++  live_keys: number;
++  created_at: string;
++}
++
++interface ServerRow {
++  id: number;
++  name: string;
++  ip: string;
++  ssh_host: string | null;
++  assign_country: string | null;
++  is_healthy: boolean;
++  visibility: string;
++  owner_email: string | null;
++  live_keys: number;
++  has_settings: boolean;
++  tarifs: string[];
++}
++
++const STATUS_LABEL: Record<string, string> = {
++  active: 'активна',
++  trial: 'тест',
++  expired: 'истекла',
++  inactive: 'без подписки',
++  expiring: 'гасится (тест)',
++  expiring_pro: 'гасится (PRO)',
++};
++
++function fmtDate(v: string | null) {
++  if (!v) return '—';
++  return new Date(v).toLocaleDateString('ru-RU');
++}
++
++export default function AdminClient({ adminEmail }: { adminEmail: string }) {
++  const [tab, setTab] = useState<Tab>('stats');
++  const [busy, setBusy] = useState(false);
++  const [note, setNote] = useState<string | null>(null);
++
++  async function call(url: string, init?: RequestInit) {
++    setBusy(true);
++    setNote(null);
++    try {
++      const res = await fetch(url, {
++        ...init,
++        headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? 'Ошибка');
++      if (data.note) setNote(data.note);
++      return data;
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  return (
++    <main className="max-w-6xl mx-auto px-3 py-6 sm:px-6 sm:py-10">
++      <header className="flex items-baseline justify-between gap-4 mb-8">
++        <h1 className="text-2xl font-medium">Админка</h1>
++        <span className="text-white/40 text-sm truncate" dir="ltr">{adminEmail}</span>
++      </header>
++
++      <nav className="flex gap-1 mb-6" aria-label="Разделы админки">
++        {([
++          ['stats', 'Сводка'],
++          ['users', 'Пользователи'],
++          ['servers', 'Ноды'],
++        ] as [Tab, string][]).map(([key, label]) => (
++          <button
++            key={key}
++            onClick={() => setTab(key)}
++            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
++              tab === key ? 'bg-card border border-border text-white' : 'text-white/50 hover:text-white/80'
++            }`}
++            aria-current={tab === key ? 'page' : undefined}
++          >
++            {label}
++          </button>
++        ))}
++      </nav>
++
++      {note && (
++        <p className="mb-4 rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm text-accent">
++          {note}
++        </p>
++      )}
++
++      {tab === 'stats' && <StatsTab call={call} />}
++      {tab === 'users' && <UsersTab call={call} busy={busy} />}
++      {tab === 'servers' && <ServersTab call={call} busy={busy} />}
++    </main>
++  );
++}
++
++// ─────────────────────────────────────────────────────────── Сводка
++
++function StatsTab({ call }: { call: (u: string, i?: RequestInit) => Promise<any> }) {
++  const [data, setData] = useState<Stats | null>(null);
++  const [err, setErr] = useState<string | null>(null);
++
++  useEffect(() => {
++    call('/api/admin/stats')
++      .then(setData)
++      .catch((e) => setErr(e.message));
++  }, [call]);
++
++  if (err) return <p className="text-sm text-red-400">{err}</p>;
++  if (!data) return <p className="text-white/40 text-sm">Загружаем…</p>;
++
++  return (
++    <div className="space-y-6">
++      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
++        {data.byStatus.map((s) => (
++          <div key={s.status} className="rounded-xl border border-border bg-card p-4">
++            <p className="text-2xl font-medium">{s.count}</p>
++            <p className="text-white/50 text-sm">{STATUS_LABEL[s.status] ?? s.status}</p>
++          </div>
++        ))}
++        <div className="rounded-xl border border-border bg-card p-4">
++          <p className="text-2xl font-medium">{data.keys.live}</p>
++          <p className="text-white/50 text-sm">живых ключей</p>
++        </div>
++      </section>
++
++      <section className="rounded-xl border border-border bg-card p-5">
++        <h2 className="text-sm text-white/50 mb-3">Выручка по месяцам</h2>
++        {data.revenue.length === 0 ? (
++          <p className="text-white/40 text-sm">Оплат пока не было.</p>
++        ) : (
++          <ul className="space-y-1 text-sm">
++            {data.revenue.map((r) => (
++              <li key={r.month} className="flex justify-between">
++                <span className="text-white/60">{r.month}</span>
++                <span>{r.total.toLocaleString('ru-RU')} ₽ · {r.count} платежей</span>
++              </li>
++            ))}
++          </ul>
++        )}
++      </section>
++
++      <section className="rounded-xl border border-border bg-card p-5">
++        <h2 className="text-sm text-white/50 mb-3">Последние платежи</h2>
++        <ul className="space-y-1 text-sm">
++          {data.recentPayments.map((p, i) => (
++            <li key={i} className="flex justify-between gap-3">
++              <span className="truncate text-white/60" dir="ltr">{p.email}</span>
++              <span className="shrink-0">
++                {p.amount} ₽ · {p.status} · {fmtDate(p.created_at)}
++              </span>
++            </li>
++          ))}
++        </ul>
++      </section>
++    </div>
++  );
++}
++
++// ─────────────────────────────────────────────────────── Пользователи
++
++function UsersTab({
++  call,
++  busy,
++}: {
++  call: (u: string, i?: RequestInit) => Promise<any>;
++  busy: boolean;
++}) {
++  const [rows, setRows] = useState<AdminUserRow[]>([]);
++  const [q, setQ] = useState('');
++  const [status, setStatus] = useState('');
++  const [total, setTotal] = useState(0);
++  const [err, setErr] = useState<string | null>(null);
++
++  const load = useCallback(() => {
++    const p = new URLSearchParams();
++    if (q) p.set('q', q);
++    if (status) p.set('status', status);
++    call(`/api/admin/users?${p}`)
++      .then((d) => {
++        setRows(d.users);
++        setTotal(d.total);
++      })
++      .catch((e) => setErr(e.message));
++  }, [call, q, status]);
++
++  useEffect(() => {
++    const t = setTimeout(load, 300);
++    return () => clearTimeout(t);
++  }, [load]);
++
++  async function act(id: number, body: Record<string, unknown>) {
++    try {
++      await call(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
++      load();
++    } catch (e) {
++      setErr(e instanceof Error ? e.message : 'Ошибка');
++    }
++  }
++
++  return (
++    <div className="space-y-4">
++      <div className="flex flex-wrap gap-2">
++        <input
++          value={q}
++          onChange={(e) => setQ(e.target.value)}
++          placeholder="Поиск по email"
++          className="flex-1 min-w-[200px] rounded-lg border border-border bg-card px-3 py-2 text-sm"
++        />
++        <select
++          value={status}
++          onChange={(e) => setStatus(e.target.value)}
++          className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
++        >
++          <option value="">все статусы</option>
++          {Object.entries(STATUS_LABEL).map(([k, v]) => (
++            <option key={k} value={k}>{v}</option>
++          ))}
++        </select>
++      </div>
++
++      {err && <p className="text-sm text-red-400">{err}</p>}
++      <p className="text-white/40 text-sm">Найдено: {total}</p>
++
++      <div className="overflow-x-auto rounded-xl border border-border">
++        <table className="w-full text-sm">
++          <thead className="bg-card text-white/50">
++            <tr>
++              <th className="px-3 py-2 text-left font-normal">Email</th>
++              <th className="px-3 py-2 text-left font-normal">Статус</th>
++              <th className="px-3 py-2 text-left font-normal">До</th>
++              <th className="px-3 py-2 text-left font-normal">Ключи</th>
++              <th className="px-3 py-2 text-left font-normal">Действия</th>
++            </tr>
++          </thead>
++          <tbody>
++            {rows.map((u) => (
++              <tr key={u.id} className="border-t border-border">
++                <td className="px-3 py-2" dir="ltr">
++                  {u.email}
++                  {u.is_admin && <span className="ml-2 text-accent text-xs">админ</span>}
++                </td>
++                <td className="px-3 py-2 text-white/60">{STATUS_LABEL[u.status] ?? u.status}</td>
++                <td className="px-3 py-2 text-white/60">{fmtDate(u.subscription_expires_at)}</td>
++                <td className="px-3 py-2 text-white/60">{u.live_keys}</td>
++                <td className="px-3 py-2">
++                  <div className="flex gap-2">
++                    <button
++                      disabled={busy}
++                      onClick={() => act(u.id, { action: 'extend', days: 30 })}
++                      className="rounded border border-border px-2 py-1 text-xs hover:border-accent disabled:opacity-40"
++                    >
++                      +30 дней
++                    </button>
++                    <button
++                      disabled={busy}
++                      onClick={() => {
++                        if (confirm(`Снять все ключи у ${u.email}? Пиры будут удалены с нод.`)) {
++                          act(u.id, { action: 'revoke' });
++                        }
++                      }}
++                      className="rounded border border-border px-2 py-1 text-xs hover:border-red-400 disabled:opacity-40"
++                    >
++                      Снять ключи
++                    </button>
++                  </div>
++                </td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      </div>
++    </div>
++  );
++}
++
++// ────────────────────────────────────────────────────────────── Ноды
++
++function ServersTab({
++  call,
++  busy,
++}: {
++  call: (u: string, i?: RequestInit) => Promise<any>;
++  busy: boolean;
++}) {
++  const [rows, setRows] = useState<ServerRow[]>([]);
++  const [err, setErr] = useState<string | null>(null);
++
++  const load = useCallback(() => {
++    call('/api/admin/servers')
++      .then((d) => setRows(d.servers))
++      .catch((e) => setErr(e.message));
++  }, [call]);
++
++  useEffect(() => { load(); }, [load]);
++
++  async function act(id: number, body: Record<string, unknown>) {
++    try {
++      await call(`/api/admin/servers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
++      load();
++    } catch (e) {
++      setErr(e instanceof Error ? e.message : 'Ошибка');
++    }
++  }
++
++  return (
++    <div className="space-y-3">
++      {err && <p className="text-sm text-red-400">{err}</p>}
++
++      {rows.map((s) => (
++        <div key={s.id} className="rounded-xl border border-border bg-card p-4">
++          <div className="flex flex-wrap items-baseline justify-between gap-2">
++            <div>
++              <p className="font-medium">
++                {s.name}
++                <span className="ml-2 text-white/40 text-sm" dir="ltr">{s.ip}</span>
++                {s.assign_country && <span className="ml-2 text-white/40 text-sm">{s.assign_country}</span>}
++              </p>
++              <p className="text-white/50 text-sm mt-1">
++                {s.live_keys} живых ключей
++                {s.tarifs.length > 0 && ` · тарифы: ${s.tarifs.join(', ')}`}
++                {s.visibility === 'private' && ` · приватная (${s.owner_email ?? 'без владельца'})`}
++              </p>
++              {!s.has_settings && (
++                <p className="text-amber-400 text-sm mt-1">
++                  Настройки не заполнены — выдать ключ с этой ноды нельзя.
++                </p>
++              )}
++            </div>
++            <div className="flex gap-2">
++              <button
++                disabled={busy}
++                onClick={() => act(s.id, { action: 'health', value: !s.is_healthy })}
++                className="rounded border border-border px-3 py-1 text-xs hover:border-accent disabled:opacity-40"
++              >
++                {s.is_healthy ? 'Выключить' : 'Включить'}
++              </button>
++              <button
++                disabled={busy}
++                onClick={() =>
++                  act(s.id, {
++                    action: 'visibility',
++                    visibility: s.visibility === 'private' ? 'public' : 'private',
++                  })
++                }
++                className="rounded border border-border px-3 py-1 text-xs hover:border-accent disabled:opacity-40"
++              >
++                {s.visibility === 'private' ? 'Открыть всем' : 'Сделать приватной'}
++              </button>
++            </div>
++          </div>
++        </div>
++      ))}
++    </div>
++  );
++}
+diff --git a/components/ProfileClient.tsx b/components/ProfileClient.tsx
+index 5b71d19..1924402 100644
+--- a/components/ProfileClient.tsx
++++ b/components/ProfileClient.tsx
+@@ -28,6 +28,7 @@ interface UserData {
+   tarif_name: string | null;
+   card_last4: string | null;
+   card_type: string | null;
++  is_admin?: boolean;
+ }
+ 
+ const MAX_KEYS = 3;
+@@ -189,9 +190,16 @@ export default function ProfileClient({
+           <p className="text-white/40 text-sm truncate" dir="ltr">{user.email}</p>
+           <h1 className="text-2xl font-medium">{t('h1')}</h1>
+         </div>
+-        <button onClick={logout} className="shrink-0 text-white/40 text-sm hover:text-white/70">
+-          {t('logout')}
+-        </button>
++        <div className="flex shrink-0 items-center gap-4">
++          {user.is_admin && (
++            <Link href="/admin" className="text-white/40 text-sm hover:text-white/70">
++              {t('admin_link')}
++            </Link>
++          )}
++          <button onClick={logout} className="text-white/40 text-sm hover:text-white/70">
++            {t('logout')}
++          </button>
++        </div>
+       </div>
+ 
+       <section className="rounded-xl border border-border bg-card p-6 mb-6">
+diff --git a/db/migrations/2026-10-admin.sql b/db/migrations/2026-10-admin.sql
+new file mode 100644
+index 0000000..2faf0b2
+--- /dev/null
++++ b/db/migrations/2026-10-admin.sql
+@@ -0,0 +1,67 @@
++-- db/migrations/2026-10-admin.sql
++-- Админка + приватные ноды. Идемпотентна, можно прогнать повторно.
++
++-- ─── 1. Админы ────────────────────────────────────────────────────────────
++ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
++
++UPDATE users SET is_admin = TRUE
++WHERE lower(email) IN ('alexrus1144@gmail.com', 'webbuildge@gmail.com');
++
++-- Если кто-то из них ещё не заводился — создаём заготовку, чтобы вход
++-- по OTP сразу дал права, а не создал обычного юзера.
++INSERT INTO users (email, status, is_admin)
++SELECT e, 'inactive', TRUE
++FROM (VALUES ('alexrus1144@gmail.com'), ('webbuildge@gmail.com')) AS t(e)
++WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = t.e);
++
++-- ─── 2. Видимость нод ─────────────────────────────────────────────────────
++-- 'public'  — раздаётся всем по тарифу (как было);
++-- 'private' — только owner_user_id, в общую выдачу не попадает.
++ALTER TABLE vpn_servers ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
++ALTER TABLE vpn_servers ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id);
++
++ALTER TABLE vpn_servers DROP CONSTRAINT IF EXISTS vpn_servers_visibility_chk;
++ALTER TABLE vpn_servers ADD CONSTRAINT vpn_servers_visibility_chk
++  CHECK (visibility IN ('public', 'private'));
++
++-- Приватная нода обязана иметь владельца, иначе её не увидит никто.
++ALTER TABLE vpn_servers DROP CONSTRAINT IF EXISTS vpn_servers_owner_chk;
++ALTER TABLE vpn_servers ADD CONSTRAINT vpn_servers_owner_chk
++  CHECK (visibility = 'public' OR owner_user_id IS NOT NULL);
++
++-- ─── 3. Индексы под админские выборки ────────────────────────────────────
++CREATE INDEX IF NOT EXISTS users_status_idx   ON users (status);
++CREATE INDEX IF NOT EXISTS users_email_lower_idx ON users (lower(email));
++CREATE INDEX IF NOT EXISTS vpn_clients_user_live_idx
++  ON vpn_clients (user_id) WHERE revoked_at IS NULL;
++CREATE INDEX IF NOT EXISTS payments_status_created_idx ON payments (status, created_at DESC);
++
++-- ─── 4. Журнал админских действий ────────────────────────────────────────
++CREATE TABLE IF NOT EXISTS admin_audit (
++  id          SERIAL PRIMARY KEY,
++  admin_id    INTEGER NOT NULL REFERENCES users(id),
++  action      TEXT    NOT NULL,
++  target_type TEXT,
++  target_id   INTEGER,
++  details     JSONB,
++  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++CREATE INDEX IF NOT EXISTS admin_audit_created_idx ON admin_audit (created_at DESC);
++
++-- ─── 5. Новая нода 38.180.236.101 — приватная, только для владельца ───────
++-- ssh_host обязателен: через него lib/vpn.ts ходит добавлять пиры.
++-- ВАЖНО: после вставки заполнить vpn_server_settings (см. VPN-SETUP.md),
++-- иначе issueVpnKey упадёт с «vpn_server_settings не заполнены».
++INSERT INTO vpn_servers (name, ip, ssh_host, assign_country, is_healthy, visibility, owner_user_id)
++SELECT 'bg-1', '38.180.236.101', '38.180.236.101', 'BG', FALSE, 'private',
++       (SELECT id FROM users WHERE lower(email) = 'webbuildge@gmail.com')
++WHERE NOT EXISTS (SELECT 1 FROM vpn_servers WHERE ip = '38.180.236.101');
++
++-- Привязать к тарифу PRO, чтобы нода вообще попадала в выборку issueVpnKey.
++INSERT INTO tarif_vpn_servers (tarif_id, vpn_server_id)
++SELECT t.id, s.id
++FROM tarifs t, vpn_servers s
++WHERE t.name = 'PRO' AND s.ip = '38.180.236.101'
++  AND NOT EXISTS (
++    SELECT 1 FROM tarif_vpn_servers x WHERE x.tarif_id = t.id AND x.vpn_server_id = s.id
++  );
+diff --git a/lib/admin.ts b/lib/admin.ts
+new file mode 100644
+index 0000000..6e03e39
+--- /dev/null
++++ b/lib/admin.ts
+@@ -0,0 +1,81 @@
++// lib/admin.ts
++// ─────────────────────────────────────────────────────────────────────────
++// Проверка прав админа. Единственный источник истины — колонка
++// users.is_admin, а не список email в коде: иначе смена состава админов
++// требует пересборки контейнера, а забытый email в git живёт вечно.
++// ─────────────────────────────────────────────────────────────────────────
++
++import sql from './db';
++import { getCurrentUser, type CurrentUser } from './auth';
++
++export class AdminError extends Error {
++  constructor(
++    message: string,
++    readonly status: number,
++  ) {
++    super(message);
++  }
++}
++
++export interface AdminUser extends CurrentUser {
++  is_admin: true;
++}
++
++/**
++ * Возвращает текущего пользователя, если он админ, иначе null.
++ * getCurrentUser() не тянет is_admin, поэтому добираем отдельным запросом —
++ * он уходит в тот же пул и стоит дешевле, чем менять общий тип сессии.
++ */
++export async function getAdmin(): Promise<AdminUser | null> {
++  const user = await getCurrentUser();
++  if (!user) return null;
++
++  const rows = await sql<{ is_admin: boolean }[]>`
++    SELECT is_admin FROM users WHERE id = ${user.id}
++  `;
++  if (!rows[0]?.is_admin) return null;
++
++  return { ...user, is_admin: true };
++}
++
++/**
++ * Для API-роутов: бросает AdminError, который роут превращает в 401/403.
++ * Намеренно разные коды: 401 — «войдите», 403 — «вошли, но не админ».
++ */
++export async function requireAdmin(): Promise<AdminUser> {
++  const user = await getCurrentUser();
++  if (!user) throw new AdminError('Войдите в аккаунт', 401);
++
++  const rows = await sql<{ is_admin: boolean }[]>`
++    SELECT is_admin FROM users WHERE id = ${user.id}
++  `;
++  if (!rows[0]?.is_admin) throw new AdminError('Недостаточно прав', 403);
++
++  return { ...user, is_admin: true };
++}
++
++/** Пишет действие в admin_audit. Падение журнала не должно рушить операцию. */
++export async function audit(
++  adminId: number,
++  action: string,
++  targetType?: string,
++  targetId?: number,
++  details?: Record<string, unknown>,
++): Promise<void> {
++  try {
++    await sql`
++      INSERT INTO admin_audit (admin_id, action, target_type, target_id, details)
++      VALUES (${adminId}, ${action}, ${targetType ?? null}, ${targetId ?? null},
++              ${details ? JSON.stringify(details) : null}::jsonb)
++    `;
++  } catch (e) {
++    console.error('admin_audit write failed:', e);
++  }
++}
++
++/** Единый обработчик ошибок для админских роутов. */
++export function adminErrorResponse(e: unknown): { error: string; status: number } {
++  if (e instanceof AdminError) return { error: e.message, status: e.status };
++  console.error('admin route failed:', e);
++  return { error: 'Ошибка сервера', status: 500 };
++}
+diff --git a/lib/auth.ts b/lib/auth.ts
+index c914eee..8198236 100644
+--- a/lib/auth.ts
++++ b/lib/auth.ts
+@@ -13,6 +13,7 @@ export interface CurrentUser {
+   payment_method_id: string | null;
+   card_last4: string | null;
+   card_type: string | null;
++  is_admin: boolean;
+ }
+ 
+ /** Читает cookie сессии и достаёт пользователя из БД. null — если не авторизован/сессия истекла. */
+@@ -24,7 +25,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
+   const rows = await sql<CurrentUser[]>`
+     SELECT
+       u.id, u.email, u.status, u.subscription_expires_at, u.vpn_key,
+-      u.payment_method_id, u.card_last4, u.card_type,
++      u.payment_method_id, u.card_last4, u.card_type, u.is_admin,
+       t.id AS tarif_id, t.name AS tarif_name
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+diff --git a/lib/vpn.ts b/lib/vpn.ts
+index 1fa8db1..09d8de2 100644
+--- a/lib/vpn.ts
++++ b/lib/vpn.ts
+@@ -195,9 +195,18 @@ export function buildClientConfig(
+   ].join('\n');
+ }
+ 
++/**
++ * Выпускает ключ. serverId — явный выбор ноды; без него берётся случайная
++ * публичная нода тарифа, как было раньше.
++ *
++ * Приватная нода (visibility = 'private') в общую раздачу не попадает
++ * никогда: условие owner_user_id = userId отсекает её для всех, кроме
++ * владельца, даже если она is_healthy и привязана к тарифу.
++ */
+ export async function issueVpnKey(
+   userId: number,
+   tarifId: number,
++  serverId?: number,
+ ): Promise<{ id: number; configText: string; country: string | null; serverName: string }> {
+   const rows = await sql<
+     {
+@@ -213,7 +222,10 @@ export async function issueVpnKey(
+     FROM tarif_vpn_servers tvs
+     JOIN vpn_servers vs ON vs.id = tvs.vpn_server_id
+     LEFT JOIN vpn_server_settings vss ON vss.vpn_server_id = vs.id
+-    WHERE tvs.tarif_id = ${tarifId} AND vs.is_healthy = TRUE
++    WHERE tvs.tarif_id = ${tarifId}
++      AND vs.is_healthy = TRUE
++      AND (vs.visibility = 'public' OR vs.owner_user_id = ${userId})
++      AND (${serverId ?? null}::int IS NULL OR vs.id = ${serverId ?? null}::int)
+     ORDER BY RANDOM()
+     LIMIT 1
+   `;
+diff --git a/messages/ar.json b/messages/ar.json
+index 11814d1..91773c7 100644
+--- a/messages/ar.json
++++ b/messages/ar.json
+@@ -34,6 +34,7 @@
+     "step3_hint": "3 أجهزة",
+     "cta_try": "جرّب مجاناً",
+     "cta_pay": "احصل على PRO الآن",
++    "cta_cabinet": "فتح لوحة التحكم",
+     "funnel_note": "تسجيل الدخول برمز يُرسل إلى بريدك الإلكتروني، دون كلمات مرور. ادفع قبل انتهاء التجربة وسيستمر نفس المفتاح في العمل — دون الحاجة لإصداره من جديد. تجربة واحدة لكل حساب؛ بعد مرور ساعة يتوقف المفتاح تلقائياً دون أي خصم.",
+     "payment_title": "الدفع — ببطاقة من أي بلد",
+     "payment_body": "نقبل بطاقات Visa وMastercard وMIR — الروسية والدولية. الدفع بالروبل لبطاقات روسيا، وبالدولار أو اليورو للبطاقات الأخرى. تتم معالجة الدفع عبر Lava، ولا نحتفظ ببيانات بطاقتك أبداً.",
+@@ -107,6 +108,7 @@
+   },
+   "profile": {
+     "logout": "تسجيل الخروج",
++    "admin_link": "الإدارة",
+     "h1": "الملف الشخصي",
+     "plan_active": "باقة {name} مفعّلة",
+     "valid_until": "حتى {date}",
+diff --git a/messages/en.json b/messages/en.json
+index cf8a5e3..1252398 100644
+--- a/messages/en.json
++++ b/messages/en.json
+@@ -34,6 +34,7 @@
+     "step3_hint": "3 devices",
+     "cta_try": "Try it free",
+     "cta_pay": "Get PRO now",
++    "cta_cabinet": "Open dashboard",
+     "funnel_note": "Sign in with an emailed code, no passwords needed. Pay before the trial ends and the same key keeps working — no need to reissue it. One trial per account; the key switches off on its own after an hour, no charges.",
+     "payment_title": "Payment — card from any country",
+     "payment_body": "We accept Visa, Mastercard and MIR — Russian and international. RUB for Russian cards, USD or EUR for others. Payment is processed via Lava; we never store card data.",
+@@ -107,6 +108,7 @@
+   },
+   "profile": {
+     "logout": "Sign out",
++    "admin_link": "Admin",
+     "h1": "Profile",
+     "plan_active": "{name} plan active",
+     "valid_until": "Until {date}",
+diff --git a/messages/es.json b/messages/es.json
+index 586f239..cc8a040 100644
+--- a/messages/es.json
++++ b/messages/es.json
+@@ -34,6 +34,7 @@
+     "step3_hint": "3 dispositivos",
+     "cta_try": "Probar gratis",
+     "cta_pay": "Obtener PRO ahora",
++    "cta_cabinet": "Abrir panel",
+     "funnel_note": "Inicia sesión con un código por email, sin contraseñas. Paga antes de que termine la prueba y la misma clave sigue funcionando — no hace falta reemitirla. Una prueba por cuenta; al pasar la hora la clave se desactiva sola, sin cargos.",
+     "payment_title": "Pago — con tarjeta de cualquier país",
+     "payment_body": "Aceptamos Visa, Mastercard y MIR — rusas e internacionales. RUB para tarjetas rusas, USD o EUR para el resto. El pago se procesa a través de Lava; nunca almacenamos los datos de tu tarjeta.",
+@@ -107,6 +108,7 @@
+   },
+   "profile": {
+     "logout": "Cerrar sesión",
++    "admin_link": "Admin",
+     "h1": "Perfil",
+     "plan_active": "Plan {name} activo",
+     "valid_until": "Hasta {date}",
+diff --git a/messages/ru.json b/messages/ru.json
+index b0c84ea..c2a3590 100644
+--- a/messages/ru.json
++++ b/messages/ru.json
+@@ -34,6 +34,7 @@
+     "step3_hint": "3 устройства",
+     "cta_try": "Проверить бесплатно",
+     "cta_pay": "Сразу оформить PRO",
++    "cta_cabinet": "Открыть кабинет",
+     "funnel_note": "Вход по коду на почту, пароли не нужны. Оплатите до конца теста — и ключ выпускать заново не придётся, он продолжит работать. Один тест на аккаунт; по истечении часа ключ отключается сам, списаний не будет.",
+     "payment_title": "Оплата — картой любой страны",
+     "payment_body": "Принимаем карты Visa, Mastercard и МИР — российские и зарубежные. Для карт РФ оплата в рублях, для остальных — в USD или EUR. Платёж проходит через Lava, данные карты обрабатывает провайдер, мы их не храним.",
+@@ -107,6 +108,7 @@
+   },
+   "profile": {
+     "logout": "Выйти",
++    "admin_link": "Админка",
+     "h1": "Профиль",
+     "plan_active": "Тариф {name} активен",
+     "valid_until": "До {date}",
+diff --git a/messages/zh.json b/messages/zh.json
+index 5e5ed18..2b85297 100644
+--- a/messages/zh.json
++++ b/messages/zh.json
+@@ -33,6 +33,7 @@
+     "step3_hint": "3 devices",
+     "cta_try": "Try it free",
+     "cta_pay": "Get PRO now",
++    "cta_cabinet": "打开控制台",
+     "funnel_note": "Sign in with an emailed code, no passwords needed. Pay before the trial ends and the same key keeps working — no need to reissue it. One trial per account; the key switches off on its own after an hour, no charges.",
+     "payment_title": "Payment — card from any country",
+     "payment_body": "We accept Visa, Mastercard and MIR — Russian and international. RUB for Russian cards, USD or EUR for others. Payment is processed via Lava; we never store card data.",
+diff --git a/middleware.ts b/middleware.ts
+index 0e373ae..dcdf76e 100644
+--- a/middleware.ts
++++ b/middleware.ts
+@@ -23,11 +23,14 @@ export function middleware(request: NextRequest) {
+   );
+   const isLogin = stripLocale === '/login' || stripLocale === '';
+   const isProfile = stripLocale.startsWith('/profile');
++  const isAdmin = stripLocale.startsWith('/admin');
+  
+   if (token && stripLocale === '/login') {
+     return NextResponse.redirect(new URL('/profile', request.url));
+   }
+-  if (!token && isProfile) {
++  // Права админа проверяет сама страница (неадмину — 404). Здесь только
++  // отсекаем анонимов, чтобы /admin не ходил в БД на каждый случайный заход.
++  if (!token && (isProfile || isAdmin)) {
+     return NextResponse.redirect(new URL('/login', request.url));
+   }
+  
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 118f215..87f4718 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -40,9 +40,15 @@ model VpnServer {
+   lastHealthCheck DateTime? @map("last_health_check") @db.Timestamptz
+   sshHost         String?   @map("ssh_host")
+ 
++  // public  — нода раздаётся всем по тарифу;
++  // private — только ownerUserId, в общую выдачу issueVpnKey не попадает.
++  visibility  String @default("public")
++  ownerUserId Int?   @map("owner_user_id")
++
++  owner           User?  @relation("VpnServerOwner", fields: [ownerUserId], references: [id])
+   settings        VpnServerSettings?
+   tarifVpnServers TarifVpnServer[]
+-  users           User[]
++  users           User[] @relation("UserAssignedServer")
+   vpnClients      VpnClient[]
+ 
+   @@map("vpn_servers")
+@@ -83,14 +89,17 @@ model User {
+   paymentMethodId        String?   @map("payment_method_id")
+   cardLast4              String?   @map("card_last4")
+   cardType               String?   @map("card_type")
++  isAdmin                Boolean   @default(false) @map("is_admin")
+   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+   updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+ 
+-  tarif      Tarif?      @relation(fields: [tarifId], references: [id])
+-  vpnServer  VpnServer?  @relation(fields: [vpnServerId], references: [id])
+-  sessions   Session[]
+-  payments   Payment[]
+-  vpnClients VpnClient[]
++  tarif          Tarif?      @relation(fields: [tarifId], references: [id])
++  vpnServer      VpnServer?  @relation("UserAssignedServer", fields: [vpnServerId], references: [id])
++  ownedServers   VpnServer[] @relation("VpnServerOwner")
++  adminAudits    AdminAudit[]
++  sessions       Session[]
++  payments       Payment[]
++  vpnClients     VpnClient[]
+ 
+   @@map("users")
+ }
+@@ -156,3 +165,21 @@ model VpnClient {
+   @@unique([vpnServerId, allowedIp])
+   @@map("vpn_clients")
+ }
++
++// Журнал действий админов: кто, что и над кем. Нужен не для красоты —
++// продление подписки и отзыв ключей меняют деньги и доступ, и без записи
++// разобраться постфактум нельзя.
++model AdminAudit {
++  id         Int      @id @default(autoincrement())
++  adminId    Int      @map("admin_id")
++  action     String
++  targetType String?  @map("target_type")
++  targetId   Int?     @map("target_id")
++  details    Json?
++  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
++
++  admin User @relation(fields: [adminId], references: [id])
++
++  @@index([createdAt])
++  @@map("admin_audit")
++}
+-- 
+2.43.0
+

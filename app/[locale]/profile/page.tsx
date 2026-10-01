@@ -78,6 +78,7 @@ export default async function ProfilePage() {
     tarif_name: user.tarif_name,
     card_last4: user.card_last4,
     card_type: user.card_type,
+    is_admin: user.is_admin,
   };
 
   return (

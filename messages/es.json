@@ -34,6 +34,7 @@
     "step3_hint": "3 dispositivos",
     "cta_try": "Probar gratis",
     "cta_pay": "Obtener PRO ahora",
+    "cta_cabinet": "Abrir panel",
     "funnel_note": "Inicia sesión con un código por email, sin contraseñas. Paga antes de que termine la prueba y la misma clave sigue funcionando — no hace falta reemitirla. Una prueba por cuenta; al pasar la hora la clave se desactiva sola, sin cargos.",
     "payment_title": "Pago — con tarjeta de cualquier país",
     "payment_body": "Aceptamos Visa, Mastercard y MIR — rusas e internacionales. RUB para tarjetas rusas, USD o EUR para el resto. El pago se procesa a través de Lava; nunca almacenamos los datos de tu tarjeta.",
@@ -107,6 +108,7 @@
   },
   "profile": {
     "logout": "Cerrar sesión",
+    "admin_link": "Admin",
     "h1": "Perfil",
     "plan_active": "Plan {name} activo",
     "valid_until": "Hasta {date}",

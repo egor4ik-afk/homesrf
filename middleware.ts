@@ -23,11 +23,14 @@ export function middleware(request: NextRequest) {
   );
   const isLogin = stripLocale === '/login' || stripLocale === '';
   const isProfile = stripLocale.startsWith('/profile');
+  const isAdmin = stripLocale.startsWith('/admin');
  
   if (token && stripLocale === '/login') {
     return NextResponse.redirect(new URL('/profile', request.url));
   }
-  if (!token && isProfile) {
+  // Права админа проверяет сама страница (неадмину — 404). Здесь только
+  // отсекаем анонимов, чтобы /admin не ходил в БД на каждый случайный заход.
+  if (!token && (isProfile || isAdmin)) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
  

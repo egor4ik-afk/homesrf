@@ -1,8 +1,23 @@
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
+import { getCurrentUser } from '@/lib/auth';
 
-export default function LandingPage() {
-  const t = useTranslations('home');
+// Страница читает cookie сессии, поэтому рендерится на запрос, а не в билде:
+// иначе кнопка застыла бы в одном состоянии для всех посетителей.
+export const dynamic = 'force-dynamic';
+
+type Props = { params: Promise<{ locale: string }> };
+
+export default async function LandingPage({ params }: Props) {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'home' });
+
+  // Подписчику незачем предлагать оформить PRO — ведём сразу в кабинет.
+  const user = await getCurrentUser();
+  const hasAccess =
+    user?.status === 'active' &&
+    !!user.subscription_expires_at &&
+    new Date(user.subscription_expires_at) > new Date();
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-20">
@@ -48,18 +63,29 @@ export default function LandingPage() {
         </ol>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <Link
-            href="/login?next=trial"
-            className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {t('cta_try')}
-          </Link>
-          <Link
-            href="/login"
-            className="px-6 py-3 rounded-lg border border-border text-white/80 font-medium text-center transition hover:border-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
-          >
-            {t('cta_pay')}
-          </Link>
+          {hasAccess ? (
+            <Link
+              href="/profile"
+              className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {t('cta_cabinet')}
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login?next=trial"
+                className="px-6 py-3 rounded-lg bg-accent text-bg font-medium text-center transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {t('cta_try')}
+              </Link>
+              <Link
+                href="/login"
+                className="px-6 py-3 rounded-lg border border-border text-white/80 font-medium text-center transition hover:border-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+              >
+                {t('cta_pay')}
+              </Link>
+            </>
+          )}
         </div>
 
         <p className="text-white/40 text-xs mt-4">{t('funnel_note')}</p>

@@ -28,6 +28,7 @@ interface UserData {
   tarif_name: string | null;
   card_last4: string | null;
   card_type: string | null;
+  is_admin?: boolean;
 }
 
 const MAX_KEYS = 3;
@@ -189,9 +190,16 @@ export default function ProfileClient({
           <p className="text-white/40 text-sm truncate" dir="ltr">{user.email}</p>
           <h1 className="text-2xl font-medium">{t('h1')}</h1>
         </div>
-        <button onClick={logout} className="shrink-0 text-white/40 text-sm hover:text-white/70">
-          {t('logout')}
-        </button>
+        <div className="flex shrink-0 items-center gap-4">
+          {user.is_admin && (
+            <Link href="/admin" className="text-white/40 text-sm hover:text-white/70">
+              {t('admin_link')}
+            </Link>
+          )}
+          <button onClick={logout} className="text-white/40 text-sm hover:text-white/70">
+            {t('logout')}
+          </button>
+        </div>
       </div>
 
       <section className="rounded-xl border border-border bg-card p-6 mb-6">

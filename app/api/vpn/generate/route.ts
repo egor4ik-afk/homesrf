@@ -1,11 +1,11 @@
 // app/api/vpn/generate/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { issueVpnKey } from '@/lib/vpn';
 import { getCurrentUser } from '@/lib/auth';
 import sql from '@/lib/db';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
 
@@ -33,7 +33,13 @@ export async function POST() {
       );
     }
 
-    const { id, configText } = await issueVpnKey(user.id, user.tarif_id);
+    // serverId необязателен. Чужую приватную ноду так не получить:
+    // фильтр в issueVpnKey вернёт пусто и поднимет «Нет живого VPN-сервера».
+    const body = await req.json().catch(() => ({}));
+    const serverId =
+      Number.isInteger(body?.serverId) && body.serverId > 0 ? Number(body.serverId) : undefined;
+
+    const { id, configText } = await issueVpnKey(user.id, user.tarif_id, serverId);
 
     return NextResponse.json({ id, config: configText });
   } catch (error: unknown) {

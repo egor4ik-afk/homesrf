@@ -34,6 +34,7 @@
     "step3_hint": "3 devices",
     "cta_try": "Try it free",
     "cta_pay": "Get PRO now",
+    "cta_cabinet": "Open dashboard",
     "funnel_note": "Sign in with an emailed code, no passwords needed. Pay before the trial ends and the same key keeps working — no need to reissue it. One trial per account; the key switches off on its own after an hour, no charges.",
     "payment_title": "Payment — card from any country",
     "payment_body": "We accept Visa, Mastercard and MIR — Russian and international. RUB for Russian cards, USD or EUR for others. Payment is processed via Lava; we never store card data.",
@@ -107,6 +108,7 @@
   },
   "profile": {
     "logout": "Sign out",
+    "admin_link": "Admin",
     "h1": "Profile",
     "plan_active": "{name} plan active",
     "valid_until": "Until {date}",
